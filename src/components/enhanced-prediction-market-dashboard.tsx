@@ -18,6 +18,7 @@ import { MarketCard } from './marketCard'
 import { Navbar } from './navbar'
 import { MarketCardSkeleton } from './market-card-skeleton'
 import { Footer } from "./footer"
+import { CreateMarketForm } from './create-market-form'
 
 export function EnhancedPredictionMarketDashboard() {
     const { data: marketCount, isLoading: isLoadingMarketCount } = useReadContract({
@@ -43,11 +44,16 @@ export function EnhancedPredictionMarketDashboard() {
                     />
                 </div>
                 <Tabs defaultValue="active" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-4">
+                        <TabsTrigger value="create">Create Market</TabsTrigger>
                         <TabsTrigger value="active">Active</TabsTrigger>
                         <TabsTrigger value="pending">Pending Resolution</TabsTrigger>
                         <TabsTrigger value="resolved">Resolved</TabsTrigger>
                     </TabsList>
+                    
+                    <TabsContent value="create" className="mt-6">
+                        <CreateMarketForm />
+                    </TabsContent>
                     
                     {isLoadingMarketCount ? (
                         <TabsContent value="active" className="mt-6">

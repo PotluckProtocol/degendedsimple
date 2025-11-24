@@ -18,12 +18,12 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { useState, useRef, useEffect } from "react";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
-import { prepareContractCall, readContract, toWei } from "thirdweb";
+import { prepareContractCall, readContract } from "thirdweb";
 import { contract, tokenContract } from "@/constants/contract";
-import { approve } from "thirdweb/extensions/erc20";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/components/ui/use-toast";
+import { toUSDC } from "@/lib/usdc-utils";
 
 // Types for the component props
 interface MarketBuyInterfaceProps {
@@ -101,31 +101,47 @@ export function MarketBuyInterface({ marketId, market }: MarketBuyInterfaceProps
         setError(null);
 
         try {
+            const amountInUSDC = toUSDC(amount);
             const userAllowance = await readContract({
                 contract: tokenContract,
                 method: "function allowance(address owner, address spender) view returns (uint256)",
                 params: [account?.address as string, contract.address]
             });
 
-            setBuyingStep(userAllowance < BigInt(toWei(amount.toString())) ? 'allowance' : 'confirm');
+            setBuyingStep(userAllowance < amountInUSDC ? 'allowance' : 'confirm');
         } catch (error) {
             console.error(error);
+            setError("Failed to check approval. Please try again.");
         }
     };
 
     // Handle token approval transaction
     const handleSetApproval = async () => {
         setIsApproving(true);
+        setError(null);
         try {
-            const tx = await approve({
+            const amountInUSDC = toUSDC(amount);
+            // Use prepareContractCall for approval to ensure correct amount format
+            const tx = await prepareContractCall({
                 contract: tokenContract,
-                spender: contract.address,
-                amount: amount
+                method: "function approve(address spender, uint256 amount)",
+                params: [contract.address, amountInUSDC]
             });
             await mutateTransaction(tx);
             setBuyingStep('confirm');
-        } catch (error) {
-            console.error(error);
+            toast({
+                title: "Approval Successful",
+                description: "You can now proceed with the purchase",
+            });
+        } catch (error: any) {
+            console.error("Approval error:", error);
+            const errorMsg = error?.message || "Failed to approve tokens. Please try again.";
+            setError(errorMsg);
+            toast({
+                title: "Approval Failed",
+                description: errorMsg,
+                variant: "destructive",
+            });
         } finally {
             setIsApproving(false);
         }
@@ -139,11 +155,13 @@ export function MarketBuyInterface({ marketId, market }: MarketBuyInterfaceProps
         }
 
         setIsConfirming(true);
+        setError(null);
         try {
+            const amountInUSDC = toUSDC(amount);
             const tx = await prepareContractCall({
                 contract,
                 method: "function buyShares(uint256 _marketId, bool _isOptionA, uint256 _amount)",
-                params: [BigInt(marketId), selectedOption === 'A', BigInt(toWei(amount.toString()))]
+                params: [BigInt(marketId), selectedOption === 'A', amountInUSDC]
             });
             await mutateTransaction(tx);
             
@@ -151,16 +169,17 @@ export function MarketBuyInterface({ marketId, market }: MarketBuyInterfaceProps
             toast({
                 title: "Purchase Successful!",
                 description: `You bought ${amount} ${selectedOption === 'A' ? market.optionA : market.optionB} shares`,
-                duration: 5000, // 5 seconds
+                duration: 5000,
             })
             
             handleCancel();
-        } catch (error) {
-            console.error(error);
-            // Optionally show error toast
+        } catch (error: any) {
+            console.error("Purchase error:", error);
+            const errorMessage = error?.message || "There was an error processing your purchase";
+            setError(errorMessage);
             toast({
                 title: "Purchase Failed",
-                description: "There was an error processing your purchase",
+                description: errorMessage,
                 variant: "destructive",
             })
         } finally {
@@ -272,7 +291,7 @@ export function MarketBuyInterface({ marketId, market }: MarketBuyInterfaceProps
                             // Amount input step
                             <div className="flex flex-col">
                                 <span className="text-xs text-gray-500 mb-1">
-                                    {`1 ${selectedOption === 'A' ? market.optionA : market.optionB} = 1 PREDICT`}
+                                    {`1 ${selectedOption === 'A' ? market.optionA : market.optionB} = 1 USDC`}
                                 </span>
                                 <div className="flex flex-col gap-1 mb-4">
                                     <div className="flex items-center gap-2 overflow-visible">

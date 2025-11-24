@@ -24,6 +24,7 @@ import { MarketResolved } from "./market-resolved";
 import { MarketPending } from "./market-pending";
 import { MarketBuyInterface } from "./market-buy-interface";
 import { MarketSharesDisplay } from "./market-shares-display";
+import { MarketResolveAdmin } from "./market-resolve-admin";
 
 // Props for the MarketCard component
 // index is the market id
@@ -141,13 +142,31 @@ export function MarketCard({ index, filter }: MarketCardProps) {
                                     optionB={market.optionB}
                                 />
                             ) : (
-                                <MarketPending />
+                                <>
+                                    <MarketPending />
+                                    <MarketResolveAdmin
+                                        marketId={index}
+                                        optionA={market.optionA}
+                                        optionB={market.optionB}
+                                        isExpired={true}
+                                    />
+                                </>
                             )
                         ) : (
-                            <MarketBuyInterface 
-                                marketId={index}
-                                market={market!}
-                            />
+                            <>
+                                <MarketBuyInterface 
+                                    marketId={index}
+                                    market={market!}
+                                />
+                                {!market?.resolved && (
+                                    <MarketResolveAdmin
+                                        marketId={index}
+                                        optionA={market.optionA}
+                                        optionB={market.optionB}
+                                        isExpired={false}
+                                    />
+                                )}
+                            </>
                         )}
                     </CardContent>
                     <CardFooter>

@@ -1,11 +1,11 @@
 import { ConnectButton, lightTheme, useActiveAccount } from "thirdweb/react";
 import { client } from "@/app/client";
-import { baseSepolia } from "thirdweb/chains";
-import { inAppWallet } from "thirdweb/wallets";
+import { sonic } from "@/constants/chain";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { tokenAddress } from "@/constants/contract";
 
 export function Navbar() {
     const account = useActiveAccount();
@@ -64,25 +64,22 @@ export function Navbar() {
                 <ConnectButton 
                     client={client} 
                     theme={lightTheme()}
-                    chain={baseSepolia}
+                    chain={sonic}
                     connectButton={{
                         style: {
                             fontSize: '0.75rem !important',
                             height: '2.5rem !important',
                         },
-                        label: 'Sign In',
+                        label: 'Connect Wallet',
                     }}
                     detailsButton={{
                         displayBalanceToken: {
-                            [baseSepolia.id]: "0x4D9604603527322F44c318FB984ED9b5A9Ce9f71"
+                            [sonic.id]: tokenAddress
                         }
                     }}
-                    wallets={[
-                        inAppWallet(),
-                    ]}
-                    accountAbstraction={{
-                        chain: baseSepolia,
-                        sponsorGas: true,
+                    connectModal={{
+                        size: "wide",
+                        title: "Connect Wallet",
                     }}
                 />
             </div>

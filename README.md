@@ -44,17 +44,34 @@ For example, if users buy 12 shares of Option A and 6 shares of Option B, and Op
 - **Frontend**: Next.js 15, React 19, TypeScript
 - **Styling**: Tailwind CSS, Radix UI components
 - **Blockchain**: thirdweb SDK v5
-- **Network**: Base Sepolia (testnet)
+- **Network**: Sonic Mainnet (Chain ID 146)
+- **Currency**: USDC (0x29219dd400f2Bf60E5a23d13Be72B486D4038894)
 - **Wallet**: In-app wallet with account abstraction
 
-## Smart Contract
+## Smart Contracts
 
-The application interacts with deployed smart contracts on Base Sepolia:
+This project uses **your own smart contracts** deployed on any EVM-compatible chain. The contract source code is included in the `contracts/` directory.
 
-- **Contract Address**: `0x124D803F8BC43cE1081110a08ADd1cABc5c83a3f`
-- **Token Address**: `0x4D9604603527322F44c318FB984ED9b5A9Ce9f71`
+### Contract Files
 
-> 📝 **Want to deploy your own contracts?** Use `npx thirdweb deploy` (no credentials needed). Contract source code is not included in this repo - see [THIRDWEB_CREDENTIALS.md](./THIRDWEB_CREDENTIALS.md) for details.
+- **`contracts/PredictionMarket.sol`** - Main prediction market contract
+- **`contracts/PredictToken.sol`** - Optional ERC20 token (not needed if using USDC)
+
+**Note**: This project is configured to use **USDC on Sonic Mainnet** (`0x29219dd400f2Bf60E5a23d13Be72B486D4038894`). The PredictToken contract is only needed if you want to create a custom token.
+
+### Deploying Your Contracts
+
+> 📝 **New to deploying?** See the [DEPLOYMENT.md](./DEPLOYMENT.md) guide for step-by-step instructions.
+
+**Quick Deploy (Sonic Mainnet with USDC):**
+1. Install dependencies: `npm install @openzeppelin/contracts`
+2. Deploy market: `npx thirdweb deploy` → Select `PredictionMarket.sol`
+3. Constructor parameter: `0x29219dd400f2Bf60E5a23d13Be72B486D4038894` (USDC address)
+4. Update `.env.local` with your contract address
+
+> 📖 See [SONIC_DEPLOYMENT.md](./contracts/SONIC_DEPLOYMENT.md) for detailed Sonic deployment instructions.
+
+The app will automatically use your deployed contracts via environment variables.
 
 ### Key Contract Functions
 
@@ -82,11 +99,21 @@ npm install
 
 3. **Create `.env.local` file:**
 ```env
+# Required
 NEXT_PUBLIC_THIRDWEB_CLIENT_ID=your_client_id
+
+# Your deployed contract addresses (after deployment)
+NEXT_PUBLIC_CONTRACT_ADDRESS=0xYourPredictionMarketAddress
+# USDC on Sonic (default, can be overridden)
+NEXT_PUBLIC_TOKEN_ADDRESS=0x29219dd400f2Bf60E5a23d13Be72B486D4038894
+
+# Optional: For token minting feature
 BACKEND_WALLET_ADDRESS=your_backend_wallet
 ENGINE_URL=https://your-engine.thirdweb.com
 THIRDWEB_SECRET_KEY=your_secret_key
 ```
+
+> 💡 **Note:** If you haven't deployed contracts yet, the app will use default testnet addresses. See [DEPLOYMENT.md](./DEPLOYMENT.md) to deploy your own.
 
 4. **Run the dev server:**
 ```bash
@@ -110,6 +137,11 @@ Create a `.env.local` file with the following variables:
 - `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`: Your thirdweb client ID (get from [thirdweb dashboard](https://thirdweb.com/dashboard))
   - **Required for:** Wallet connection, app functionality
   - **Get it:** Dashboard → Settings → API Keys → Client ID
+
+### Contract Addresses (After Deployment)
+- `NEXT_PUBLIC_CONTRACT_ADDRESS`: Your deployed PredictionMarket contract address
+- `NEXT_PUBLIC_TOKEN_ADDRESS`: Your deployed PredictToken contract address
+  - **Note:** If not set, defaults to testnet addresses will be used
 
 ### Optional (Only for "Claim Tokens" feature)
 - `BACKEND_WALLET_ADDRESS`: Your backend wallet address for token minting

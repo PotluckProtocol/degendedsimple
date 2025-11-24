@@ -1,7 +1,6 @@
 import { Badge } from "./ui/badge";
-import { toEther } from "thirdweb";
 import { useEffect, useState } from "react";
-import { toFixed } from "@/lib/utils";
+import { fromUSDC, formatUSDC } from "@/lib/usdc-utils";
 
 interface MarketSharesDisplayProps {
     market: {
@@ -58,13 +57,15 @@ export function MarketSharesDisplay({
         }
     }, [sharesBalance, market.totalOptionAShares, market.totalOptionBShares]);
 
-    const displayWinningsA = toFixed(Number(toEther(winnings.A)), 2);
-    const displayWinningsB = toFixed(Number(toEther(winnings.B)), 2);
+    const displayWinningsA = formatUSDC(winnings.A, 2);
+    const displayWinningsB = formatUSDC(winnings.B, 2);
+    const userSharesA = formatUSDC(sharesBalance?.optionAShares || BigInt(0), 0);
+    const userSharesB = formatUSDC(sharesBalance?.optionBShares || BigInt(0), 0);
 
     return (
         <div className="flex flex-col gap-2">
             <div className="w-full text-sm text-muted-foreground">
-                Your shares: {market.optionA} - {Math.floor(parseInt(toEther(sharesBalance?.optionAShares)))}, {market.optionB} - {Math.floor(parseInt(toEther(sharesBalance?.optionBShares)))}
+                Your shares: {market.optionA} - {userSharesA}, {market.optionB} - {userSharesB}
             </div>
             {(winnings.A > 0 || winnings.B > 0) && (
                 <div className="flex flex-col gap-1">

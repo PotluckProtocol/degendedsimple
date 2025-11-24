@@ -1,29 +1,35 @@
 // src/constants/contract.ts
 // Smart contract addresses and configuration
-// These contracts are deployed on Base Sepolia testnet
+// Configured for Sonic mainnet with USDC
 
 import { client } from "@/app/client";
 import { getContract } from "thirdweb";
-import { baseSepolia } from "thirdweb/chains";
+import { sonic } from "./chain";
 
 // Prediction Market Contract Address
 // Handles market creation, share purchases, resolution, and reward claims
-export const contractAddress = "0x124D803F8BC43cE1081110a08ADd1cABc5c83a3f";
+// Can be set via NEXT_PUBLIC_CONTRACT_ADDRESS environment variable
+export const contractAddress = 
+    process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || 
+    "0x9ba58D2b55B5bd321a406C63594024f4eAAC1557"; // Latest deployed contract
 
-// ERC20 Token Contract Address
+// USDC Token Contract Address on Sonic Mainnet
 // Used for purchasing shares in prediction markets
-export const tokenAddress = "0x4D9604603527322F44c318FB984ED9b5A9Ce9f71";
+// Contract: 0x29219dd400f2Bf60E5a23d13Be72B486D4038894
+export const tokenAddress = 
+    process.env.NEXT_PUBLIC_TOKEN_ADDRESS || 
+    "0x29219dd400f2Bf60E5a23d13Be72B486D4038894";
 
 // Contract instance for prediction market interactions
 export const contract = getContract({
     client: client,
-    chain: baseSepolia,
+    chain: sonic,
     address: contractAddress
 });
 
-// Contract instance for ERC20 token interactions (approvals, transfers)
+// Contract instance for USDC token interactions (approvals, transfers)
 export const tokenContract = getContract({
     client: client,
-    chain: baseSepolia,
+    chain: sonic,
     address: tokenAddress
 });

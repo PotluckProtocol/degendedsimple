@@ -1,5 +1,5 @@
 import { Progress } from "@/components/ui/progress";
-import { toEther } from "thirdweb";
+import { fromUSDC, formatUSDC } from "@/lib/usdc-utils";
 
 interface MarketProgressProps {
     optionA: string;
@@ -14,9 +14,11 @@ export function MarketProgress({
     totalOptionAShares, 
     totalOptionBShares 
 }: MarketProgressProps) {
-    const totalShares = Number(totalOptionAShares) + Number(totalOptionBShares);
+    const sharesA = fromUSDC(totalOptionAShares);
+    const sharesB = fromUSDC(totalOptionBShares);
+    const totalShares = sharesA + sharesB;
     const yesPercentage = totalShares > 0 
-        ? (Number(totalOptionAShares) / totalShares) * 100 
+        ? (sharesA / totalShares) * 100 
         : 50;
 
     return (
@@ -24,7 +26,7 @@ export function MarketProgress({
             <div className="flex justify-between mb-2">
                 <span>
                     <span className="font-bold text-sm">
-                        {optionA}: {Math.floor(parseInt(toEther(totalOptionAShares)))}
+                        {optionA}: {formatUSDC(totalOptionAShares, 0)}
                     </span>
                     {totalShares > 0 && (
                         <span className="text-xs text-gray-500"> {Math.floor(yesPercentage)}%</span>
@@ -32,7 +34,7 @@ export function MarketProgress({
                 </span>
                 <span>
                     <span className="font-bold text-sm">
-                        {optionB}: {Math.floor(parseInt(toEther(totalOptionBShares)))}
+                        {optionB}: {formatUSDC(totalOptionBShares, 0)}
                     </span>
                     {totalShares > 0 && (
                         <span className="text-xs text-gray-500"> {Math.floor(100 - yesPercentage)}%</span>
