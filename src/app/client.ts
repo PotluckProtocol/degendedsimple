@@ -1,4 +1,6 @@
-// src/client.ts
+// src/app/client.ts
+// thirdweb client configuration for blockchain interactions
+// This client is used throughout the app to interact with smart contracts
 import { createThirdwebClient } from "thirdweb";
 
 export const client = createThirdwebClient({

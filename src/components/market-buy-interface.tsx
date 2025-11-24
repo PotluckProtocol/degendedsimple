@@ -1,3 +1,19 @@
+/**
+ * Market Buy Interface Component
+ * 
+ * Handles the complete share purchase flow for prediction markets:
+ * 1. Option selection (A or B)
+ * 2. Amount input
+ * 3. Token approval (if needed)
+ * 4. Transaction confirmation
+ * 
+ * Features:
+ * - Smooth transitions between purchase steps
+ * - Automatic token allowance checking
+ * - Error handling and user feedback via toasts
+ * - Disabled state when user is not connected
+ */
+
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { useState, useRef, useEffect } from "react";

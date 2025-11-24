@@ -1,5 +1,16 @@
 'use client'
 
+/**
+ * Enhanced Prediction Market Dashboard
+ * 
+ * Main dashboard component that displays prediction markets in three categories:
+ * - Active: Markets still accepting bets (not expired)
+ * - Pending Resolution: Markets that have expired but not yet resolved
+ * - Resolved: Markets that have been resolved and allow reward claims
+ * 
+ * Uses thirdweb's useReadContract hook to fetch the total market count from the smart contract.
+ */
+
 import { useReadContract } from 'thirdweb/react'
 import { contract } from '@/constants/contract'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"

@@ -1,3 +1,19 @@
+/**
+ * Claim Token API Route
+ * 
+ * Handles minting demo tokens to users via thirdweb Engine.
+ * This endpoint:
+ * 1. Receives a user address
+ * 2. Calls thirdweb Engine to mint 100 tokens to that address
+ * 3. Polls the transaction status until it's mined
+ * 4. Returns success/failure status
+ * 
+ * Required environment variables:
+ * - BACKEND_WALLET_ADDRESS: Wallet that will sign the mint transaction
+ * - ENGINE_URL: Your thirdweb Engine instance URL
+ * - THIRDWEB_SECRET_KEY: Secret key for Engine API authentication
+ */
+
 import { tokenAddress } from "@/constants/contract";
 import { NextResponse } from "next/server";
 

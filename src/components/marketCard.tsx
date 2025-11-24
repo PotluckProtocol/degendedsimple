@@ -1,3 +1,19 @@
+/**
+ * Market Card Component
+ * 
+ * Displays a single prediction market with:
+ * - Market question and expiration time
+ * - Current share distribution (progress bar)
+ * - Interactive UI based on market state:
+ *   - Active: Buy interface for purchasing shares
+ *   - Pending: Waiting for resolution message
+ *   - Resolved: Outcome display and claim rewards button
+ * - User's current shares and potential winnings
+ * 
+ * The component filters markets based on their state (active/pending/resolved)
+ * and only renders if the market matches the specified filter.
+ */
+
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { useActiveAccount, useReadContract } from "thirdweb/react";
 import { contract } from "@/constants/contract";
