@@ -1,24 +1,12 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import "./globals.css";
 import { ThirdwebProvider } from "thirdweb/react";
 import { Toaster } from "@/components/ui/toaster";
 import { client } from "./client";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
-});
-
 export const metadata: Metadata = {
-  title: "Simple Prediction Market",
-  description: "A decentralized prediction market dApp built with Next.js and thirdweb. Bet on future outcomes with blockchain transparency.",
+  title: "DEGENDED MARKETS",
+  description: "Decentralized prediction markets on Sonic. Bet on future outcomes with blockchain transparency.",
 };
 
 export default function RootLayout({
@@ -27,10 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="en" className="dark">
+      <body className="antialiased">
         <ThirdwebProvider>
           {children}
         </ThirdwebProvider>

@@ -1,69 +1,35 @@
-import { ConnectButton, lightTheme, useActiveAccount } from "thirdweb/react";
+import { ConnectButton, darkTheme } from "thirdweb/react";
 import { client } from "@/app/client";
 import { sonic } from "@/constants/chain";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
 import { tokenAddress } from "@/constants/contract";
 
 export function Navbar() {
-    const account = useActiveAccount();
-    const [isClaimLoading, setIsClaimLoading] = useState(false);
-    const { toast } = useToast();
-
-    const handleClaimTokens = async () => {
-        setIsClaimLoading(true);
-        try {
-            const resp = await fetch("/api/claimToken", {
-                method: "POST",
-                body: JSON.stringify({ address: account?.address }),
-            });
-            
-            if (!resp.ok) {
-                throw new Error('Failed to claim tokens');
-            }
-
-            toast({
-                title: "Tokens Claimed!",
-                description: "Your tokens have been successfully claimed.",
-                duration: 5000,
-            });
-        } catch (error) {
-            console.error(error);
-            toast({
-                title: "Claim Failed",
-                description: "There was an error claiming your tokens. Please try again.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsClaimLoading(false);
-        }
-    };
-    
     return (
         <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold">Simple Prediction Market</h1>
+            <h1 className="text-5xl md:text-6xl font-black tracking-wider uppercase" 
+                style={{
+                    fontFamily: '"Courier New", monospace',
+                    textShadow: `
+                        3px 3px 0px #3B82F6,
+                        6px 6px 0px #2563EB,
+                        9px 9px 0px #1E40AF,
+                        12px 12px 0px #1E3A8A,
+                        0 0 10px rgba(59, 130, 246, 0.5),
+                        0 0 20px rgba(59, 130, 246, 0.3)
+                    `,
+                    color: '#60A5FA',
+                    letterSpacing: '0.1em',
+                    imageRendering: 'pixelated',
+                    WebkitFontSmoothing: 'none',
+                    MozOsxFontSmoothing: 'unset',
+                    filter: 'contrast(1.2)'
+                }}>
+                DEGENDED MARKETS
+            </h1>
             <div className="items-center flex gap-2">
-                {account && (
-                    <Button 
-                        onClick={handleClaimTokens}
-                        disabled={isClaimLoading}
-                        variant="outline"
-                    >
-                        {isClaimLoading ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Claiming...
-                            </>
-                        ) : (
-                            'Claim Tokens'
-                        )}
-                    </Button>
-                )}
                 <ConnectButton 
                     client={client} 
-                    theme={lightTheme()}
+                    theme={darkTheme()}
                     chain={sonic}
                     connectButton={{
                         style: {

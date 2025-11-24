@@ -39,8 +39,15 @@ export function MarketSharesDisplay({
         // Calculate their share of the losing side's shares
         const winningsFromLosingShares = (totalLosingShares * userProportion) / BigInt(1000000);
         
-        // Total winnings is their original shares plus their proportion of losing shares
-        return userShares + winningsFromLosingShares;
+        // Gross winnings: original shares plus their proportion of losing shares
+        const grossWinnings = userShares + winningsFromLosingShares;
+        
+        // Apply 10% protocol fee (1000 basis points = 10%)
+        const PROTOCOL_FEE_BPS = BigInt(1000); // 10%
+        const protocolFee = (grossWinnings * PROTOCOL_FEE_BPS) / BigInt(10000);
+        const netWinnings = grossWinnings - protocolFee;
+        
+        return netWinnings;
     };
 
     useEffect(() => {

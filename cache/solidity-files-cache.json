@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "C:\\Users\\theri\\Desktop\\devworld\\degendedsimple\\contracts\\PredictionMarket.sol": {
-      "lastModificationDate": 1764014892606,
-      "contentHash": "9482a3ef67cb3a784249e980a520f7f6",
+      "lastModificationDate": 1764016945751,
+      "contentHash": "d821f22f2bfb37b0406effcea12149e6",
       "sourceName": "contracts/PredictionMarket.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -268,8 +268,8 @@
       ]
     },
     "C:\\Users\\theri\\Desktop\\devworld\\degendedsimple\\contracts\\PredictToken.sol": {
-      "lastModificationDate": 1764005800437,
-      "contentHash": "eda5475c0a5613e3314c5ab19655f6e0",
+      "lastModificationDate": 1764015920791,
+      "contentHash": "5e46c1113adef761eefc6ebd69d4636d",
       "sourceName": "contracts/PredictToken.sol",
       "solcConfig": {
         "version": "0.8.20",

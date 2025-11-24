@@ -30,6 +30,12 @@ contract PredictionMarket is Ownable {
     // ERC20 token used for purchasing shares (e.g., USDC on Sonic mainnet)
     IERC20 public token;
     
+    // Protocol fee: 10% (1000 = 10%, stored as basis points)
+    uint256 public constant PROTOCOL_FEE_BPS = 1000; // 10%
+    
+    // Admin wallet address for receiving protocol fees
+    address public constant ADMIN_WALLET = 0xBd01d1D9C9F7475641092A6387FFE9f07237a2E3;
+    
     // Mapping from market ID => user address => (optionA shares, optionB shares)
     mapping(uint256 => mapping(address => uint256[2])) public shares;
     
@@ -156,6 +162,7 @@ contract PredictionMarket is Ownable {
     /**
      * @dev Claim winnings from a resolved market
      * @param _marketId The market ID
+     * @notice 10% protocol fee is deducted and sent to admin wallet
      */
     function claimWinnings(uint256 _marketId) public {
         Market storage market = markets[_marketId];
@@ -169,7 +176,11 @@ contract PredictionMarket is Ownable {
         // Calculate winnings: proportional share of total pool
         uint256 totalShares = market.outcome == 1 ? market.totalOptionAShares : market.totalOptionBShares;
         uint256 totalPool = market.totalOptionAShares + market.totalOptionBShares;
-        uint256 winnings = (totalPool * winningShares) / totalShares;
+        uint256 grossWinnings = (totalPool * winningShares) / totalShares;
+        
+        // Calculate protocol fee (10%)
+        uint256 protocolFee = (grossWinnings * PROTOCOL_FEE_BPS) / 10000;
+        uint256 netWinnings = grossWinnings - protocolFee;
         
         // Reset user shares to prevent double claiming
         if (market.outcome == 1) {
@@ -178,10 +189,15 @@ contract PredictionMarket is Ownable {
             shares[_marketId][msg.sender][1] = 0;
         }
         
-        // Transfer winnings
-        require(token.transfer(msg.sender, winnings), "Token transfer failed");
+        // Transfer net winnings to user
+        require(token.transfer(msg.sender, netWinnings), "Token transfer failed");
         
-        emit WinningsClaimed(_marketId, msg.sender, winnings);
+        // Transfer protocol fee to admin wallet
+        if (protocolFee > 0) {
+            require(token.transfer(ADMIN_WALLET, protocolFee), "Fee transfer failed");
+        }
+        
+        emit WinningsClaimed(_marketId, msg.sender, netWinnings);
     }
 
     /**

@@ -29,7 +29,7 @@ export function MarketProgress({
                         {optionA}: {formatUSDC(totalOptionAShares, 0)}
                     </span>
                     {totalShares > 0 && (
-                        <span className="text-xs text-gray-500"> {Math.floor(yesPercentage)}%</span>
+                        <span className="text-xs text-muted-foreground"> {Math.floor(yesPercentage)}%</span>
                     )}
                 </span>
                 <span>
@@ -37,7 +37,7 @@ export function MarketProgress({
                         {optionB}: {formatUSDC(totalOptionBShares, 0)}
                     </span>
                     {totalShares > 0 && (
-                        <span className="text-xs text-gray-500"> {Math.floor(100 - yesPercentage)}%</span>
+                        <span className="text-xs text-muted-foreground"> {Math.floor(100 - yesPercentage)}%</span>
                     )}
                 </span>
             </div>

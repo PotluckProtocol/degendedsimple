@@ -99,11 +99,11 @@ export function MarketCard({ index, filter }: MarketCardProps) {
         
         switch (filter) {
             case 'active':
-                return !isExpired;
+                return !isExpired && !isResolved; // Active: not expired and not resolved
             case 'pending':
-                return isExpired && !isResolved;
+                return isExpired && !isResolved; // Pending: expired but not resolved
             case 'resolved':
-                return isExpired && isResolved;
+                return isResolved; // Resolved: resolved regardless of expiration (allows early resolution)
             default:
                 return true;
         }
@@ -133,39 +133,37 @@ export function MarketCard({ index, filter }: MarketCardProps) {
                                 totalOptionBShares={market.totalOptionBShares}
                             />
                         )}
-                        {new Date(Number(market?.endTime) * 1000) < new Date() ? (
-                            market?.resolved ? (
-                                <MarketResolved 
+                        {market?.resolved ? (
+                            <MarketResolved 
+                                marketId={index}
+                                outcome={market.outcome}
+                                optionA={market.optionA}
+                                optionB={market.optionB}
+                                totalOptionAShares={market.totalOptionAShares}
+                                totalOptionBShares={market.totalOptionBShares}
+                            />
+                        ) : new Date(Number(market?.endTime) * 1000) < new Date() ? (
+                            <>
+                                <MarketPending />
+                                <MarketResolveAdmin
                                     marketId={index}
-                                    outcome={market.outcome}
                                     optionA={market.optionA}
                                     optionB={market.optionB}
+                                    isExpired={true}
                                 />
-                            ) : (
-                                <>
-                                    <MarketPending />
-                                    <MarketResolveAdmin
-                                        marketId={index}
-                                        optionA={market.optionA}
-                                        optionB={market.optionB}
-                                        isExpired={true}
-                                    />
-                                </>
-                            )
+                            </>
                         ) : (
                             <>
                                 <MarketBuyInterface 
                                     marketId={index}
                                     market={market!}
                                 />
-                                {!market?.resolved && (
-                                    <MarketResolveAdmin
-                                        marketId={index}
-                                        optionA={market.optionA}
-                                        optionB={market.optionB}
-                                        isExpired={false}
-                                    />
-                                )}
+                                <MarketResolveAdmin
+                                    marketId={index}
+                                    optionA={market.optionA}
+                                    optionB={market.optionB}
+                                    isExpired={false}
+                                />
                             </>
                         )}
                     </CardContent>

@@ -82,7 +82,7 @@ export function MarketResolveAdmin({
     }
 
     return (
-        <Card className="mt-4 border-2 border-orange-200">
+        <Card className="mt-4 border-2 border-orange-500/50 bg-orange-500/5">
             <CardHeader>
                 <CardTitle className="text-sm">Admin: Resolve Market</CardTitle>
                 <CardDescription className="text-xs">

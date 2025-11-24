@@ -9,21 +9,21 @@ export function Footer() {
                     <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
                         Built by{" "}
                         <Link
-                            href="https://twitter.com/yourusername"
+                            href="https://x.com/draculapresley"
                             target="_blank"
                             rel="noreferrer"
-                            className="font-medium underline underline-offset-4"
+                            className="font-medium underline underline-offset-4 hover:text-primary transition-colors"
                         >
-                            your-name
+                            Dracula Presley
                         </Link>
-                        . The source code is available on{" "}
+                        .{" "}
                         <Link
-                            href="https://github.com/yourusername/your-repo"
+                            href="https://t.me/GMSONICBREAKFASTCLUB"
                             target="_blank"
                             rel="noreferrer"
-                            className="font-medium underline underline-offset-4"
+                            className="font-medium underline underline-offset-4 hover:text-primary transition-colors"
                         >
-                            GitHub
+                            Join the Rope Haus
                         </Link>
                         .
                     </p>

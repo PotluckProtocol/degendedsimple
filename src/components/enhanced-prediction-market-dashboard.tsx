@@ -11,7 +11,7 @@
  * Uses thirdweb's useReadContract hook to fetch the total market count from the smart contract.
  */
 
-import { useReadContract } from 'thirdweb/react'
+import { useReadContract, useActiveAccount } from 'thirdweb/react'
 import { contract } from '@/constants/contract'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MarketCard } from './marketCard'
@@ -21,11 +21,21 @@ import { Footer } from "./footer"
 import { CreateMarketForm } from './create-market-form'
 
 export function EnhancedPredictionMarketDashboard() {
+    const account = useActiveAccount();
     const { data: marketCount, isLoading: isLoadingMarketCount } = useReadContract({
         contract,
         method: "function marketCount() view returns (uint256)",
         params: []
-    }); 
+    });
+    
+    // Check if current user is the contract owner (admin)
+    const { data: ownerAddress } = useReadContract({
+        contract,
+        method: "function owner() view returns (address)",
+        params: []
+    });
+    
+    const isAdmin = account?.address?.toLowerCase() === ownerAddress?.toLowerCase(); 
 
     // Show 6 skeleton cards while loading
     const skeletonCards = Array.from({ length: 6 }, (_, i) => (
@@ -38,22 +48,31 @@ export function EnhancedPredictionMarketDashboard() {
                 <Navbar />
                 <div className="mb-4">
                     <img 
-                        src="https://placehold.co/800x300" 
-                        alt="Placeholder Banner" 
-                        className="w-full h-auto rounded-lg" 
+                        src="/banner.png" 
+                        alt="DEGENDED MARKETS Banner" 
+                        className="w-full h-auto rounded-xl border-2 border-primary/30 shadow-2xl shadow-primary/20" 
+                        style={{
+                            boxShadow: '0 25px 50px -12px rgba(59, 130, 246, 0.25), 0 0 0 1px rgba(59, 130, 246, 0.1)'
+                        }}
+                        onError={(e) => {
+                            // Fallback to placeholder if image not found
+                            e.currentTarget.src = "https://placehold.co/800x300/1e3a8a/60a5fa?text=DEGENDED+MARKETS";
+                        }}
                     />
                 </div>
                 <Tabs defaultValue="active" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="create">Create Market</TabsTrigger>
+                    <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                        {isAdmin && <TabsTrigger value="create">Create Market</TabsTrigger>}
                         <TabsTrigger value="active">Active</TabsTrigger>
                         <TabsTrigger value="pending">Pending Resolution</TabsTrigger>
                         <TabsTrigger value="resolved">Resolved</TabsTrigger>
                     </TabsList>
                     
-                    <TabsContent value="create" className="mt-6">
-                        <CreateMarketForm />
-                    </TabsContent>
+                    {isAdmin && (
+                        <TabsContent value="create" className="mt-6">
+                            <CreateMarketForm />
+                        </TabsContent>
+                    )}
                     
                     {isLoadingMarketCount ? (
                         <TabsContent value="active" className="mt-6">

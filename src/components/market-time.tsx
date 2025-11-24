@@ -22,8 +22,8 @@ export function MarketTime({ endTime, className }: MarketTimeProps) {
             className={cn(
                 "mb-2 w-fit px-2 py-1 rounded border text-xs",
                 isEnded 
-                    ? "bg-red-200 border-red-300 text-red-800" 
-                    : "border-gray-300 text-gray-800",
+                    ? "bg-red-500/20 border-red-500/30 text-red-400" 
+                    : "border-muted text-muted-foreground",
                 className
             )}
         >
