@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import { useActiveAccount, useSendAndConfirmTransaction } from "thirdweb/react";
-import { prepareContractCall, toWei } from "thirdweb";
+import { prepareContractCall } from "thirdweb";
 import { contract } from "@/constants/contract";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";

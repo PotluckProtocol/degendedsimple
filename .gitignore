@@ -33,6 +33,10 @@ yarn-error.log*
 .env*
 .env.deploy
 
+# build artifacts
+/artifacts
+/cache
+
 # vercel
 .vercel
 
