@@ -7,12 +7,9 @@ export const metadata: Metadata = {
   title: "DEGENDED MARKETS",
   description: "Decentralized prediction markets on Sonic. Bet on future outcomes with blockchain transparency.",
   icons: {
-    icon: [
-      { url: '/icon.png', sizes: 'any', type: 'image/png' },
-    ],
-    apple: [
-      { url: '/apple-icon.png', sizes: '180x180', type: 'image/png' },
-    ],
+    icon: '/icon.png',
+    apple: '/apple-icon.png',
+    shortcut: '/icon.png',
   },
   openGraph: {
     title: "DEGENDED MARKETS",
