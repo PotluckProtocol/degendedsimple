@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ThirdwebProvider } from "thirdweb/react";
 import { Toaster } from "@/components/ui/toaster";
-import { client } from "./client";
 
 export const metadata: Metadata = {
   title: "DEGENDED MARKETS",
