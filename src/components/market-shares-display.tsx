@@ -1,6 +1,6 @@
 import { Badge } from "./ui/badge";
 import { useEffect, useState } from "react";
-import { fromUSDC, formatUSDC } from "@/lib/usdc-utils";
+import { formatUSDC } from "@/lib/usdc-utils";
 
 interface MarketSharesDisplayProps {
     market: {
@@ -62,6 +62,7 @@ export function MarketSharesDisplay({
         if (newWinnings.A !== winnings.A || newWinnings.B !== winnings.B) {
             setWinnings(newWinnings);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sharesBalance, market.totalOptionAShares, market.totalOptionBShares]);
 
     const displayWinningsA = formatUSDC(winnings.A, 2);

@@ -100,11 +100,12 @@ export function MarketResolved({
             
             // Reset claimable amount after successful claim
             setClaimableAmount(BigInt(0));
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error claiming winnings:", error);
+            const errorMessage = error instanceof Error ? error.message : "Failed to claim winnings. Please try again.";
             toast({
                 title: "Claim Failed",
-                description: error?.message || "Failed to claim winnings. Please try again.",
+                description: errorMessage,
                 variant: "destructive"
             });
         } finally {

@@ -133,9 +133,9 @@ export function MarketBuyInterface({ marketId, market }: MarketBuyInterfaceProps
                 title: "Approval Successful",
                 description: "You can now proceed with the purchase",
             });
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Approval error:", error);
-            const errorMsg = error?.message || "Failed to approve tokens. Please try again.";
+            const errorMsg = error instanceof Error ? error.message : "Failed to approve tokens. Please try again.";
             setError(errorMsg);
             toast({
                 title: "Approval Failed",
@@ -173,9 +173,9 @@ export function MarketBuyInterface({ marketId, market }: MarketBuyInterfaceProps
             })
             
             handleCancel();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Purchase error:", error);
-            const errorMessage = error?.message || "There was an error processing your purchase";
+            const errorMessage = error instanceof Error ? error.message : "There was an error processing your purchase";
             setError(errorMessage);
             toast({
                 title: "Purchase Failed",

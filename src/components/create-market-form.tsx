@@ -102,11 +102,12 @@ export function CreateMarketForm() {
             setOptionB("");
             setEndDate(getDefaultDate());
             setEndTime(getDefaultTime());
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error creating market:", error);
+            const errorMessage = error instanceof Error ? error.message : "An error occurred while creating the market. Make sure you're the contract owner.";
             toast({
                 title: "Failed to Create Market",
-                description: error?.message || "An error occurred while creating the market. Make sure you're the contract owner.",
+                description: errorMessage,
                 variant: "destructive",
             });
         } finally {
@@ -130,7 +131,7 @@ export function CreateMarketForm() {
             <CardHeader>
                 <CardTitle>Create New Prediction Market</CardTitle>
                 <CardDescription>
-                    Only the contract owner can create markets. Make sure you're connected with the owner wallet.
+                    Only the contract owner can create markets. Make sure you&apos;re connected with the owner wallet.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

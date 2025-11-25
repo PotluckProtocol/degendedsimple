@@ -64,11 +64,12 @@ export function MarketResolveAdmin({
                 description: `Market resolved: ${outcome === 1 ? optionA : optionB} won.`,
             });
             setSelectedOutcome(null);
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error resolving market:", error);
+            const errorMessage = error instanceof Error ? error.message : "Failed to resolve market";
             toast({
                 title: "Error",
-                description: error?.message || "Failed to resolve market",
+                description: errorMessage,
                 variant: "destructive"
             });
         } finally {

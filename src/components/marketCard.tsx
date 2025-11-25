@@ -142,7 +142,7 @@ export function MarketCard({ index, filter }: MarketCardProps) {
                                 totalOptionAShares={market.totalOptionAShares}
                                 totalOptionBShares={market.totalOptionBShares}
                             />
-                        ) : new Date(Number(market?.endTime) * 1000) < new Date() ? (
+                        ) : market && new Date(Number(market.endTime) * 1000) < new Date() ? (
                             <>
                                 <MarketPending />
                                 <MarketResolveAdmin
@@ -152,11 +152,11 @@ export function MarketCard({ index, filter }: MarketCardProps) {
                                     isExpired={true}
                                 />
                             </>
-                        ) : (
+                        ) : market ? (
                             <>
                                 <MarketBuyInterface 
                                     marketId={index}
-                                    market={market!}
+                                    market={market}
                                 />
                                 <MarketResolveAdmin
                                     marketId={index}
@@ -165,7 +165,7 @@ export function MarketCard({ index, filter }: MarketCardProps) {
                                     isExpired={false}
                                 />
                             </>
-                        )}
+                        ) : null}
                     </CardContent>
                     <CardFooter>
                         {market && sharesBalance && (
