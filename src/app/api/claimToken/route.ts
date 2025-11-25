@@ -15,6 +15,7 @@
  */
 
 import { tokenAddress } from "@/constants/contract";
+import { sonic } from "@/constants/chain";
 import { NextResponse } from "next/server";
 
 const {
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
   const { address } = await request.json();
 
   const resp = await fetch(
-    `${ENGINE_URL}/contract/84532/${tokenAddress}/erc20/mint-to`,
+    `${ENGINE_URL}/contract/${sonic.id}/${tokenAddress}/erc20/mint-to`,
     {
       method: "POST",
       headers: {

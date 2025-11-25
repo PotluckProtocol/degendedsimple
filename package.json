@@ -8,7 +8,14 @@
     "start": "next start",
     "lint": "next lint",
     "deploy:sonic": "hardhat run scripts/deploy.js --network sonic",
-    "compile": "hardhat compile"
+    "compile": "hardhat compile",
+    "engine:setup": "./scripts/setup-local-engine.sh",
+    "engine:start": "docker compose -f docker-compose.engine.yml up -d",
+    "engine:stop": "docker compose -f docker-compose.engine.yml down",
+    "engine:logs": "docker compose -f docker-compose.engine.yml logs -f engine",
+    "engine:status": "docker compose -f docker-compose.engine.yml ps",
+    "engine:create": "npx thirdweb engine create",
+    "engine:list": "npx thirdweb engine list"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.4.0",
