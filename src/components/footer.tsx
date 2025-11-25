@@ -12,7 +12,7 @@ export function Footer() {
                             href="https://x.com/draculapresley"
                             target="_blank"
                             rel="noreferrer"
-                            className="font-medium underline underline-offset-4 hover:text-primary transition-colors"
+                            className="font-medium hover:text-blue-400 transition-all duration-300 hover:drop-shadow-[0_0_12px_rgba(96,165,250,1)]"
                         >
                             Dracula Presley
                         </Link>
@@ -21,7 +21,7 @@ export function Footer() {
                             href="https://t.me/GMSONICBREAKFASTCLUB"
                             target="_blank"
                             rel="noreferrer"
-                            className="font-medium underline underline-offset-4 hover:text-primary transition-colors"
+                            className="font-medium hover:text-blue-400 transition-all duration-300 hover:drop-shadow-[0_0_12px_rgba(96,165,250,1)]"
                         >
                             Join the Rope Haus
                         </Link>
@@ -30,11 +30,12 @@ export function Footer() {
                 </div>
                 <div className="flex items-center gap-4">
                     <Link
-                        href="https://github.com/yourusername/your-repo"
+                        href="https://www.youtube.com/watch?v=tYzMYcUty6s"
                         target="_blank"
                         rel="noreferrer"
+                        className="transition-all duration-300 hover:drop-shadow-[0_0_12px_rgba(96,165,250,1)]"
                     >
-                        <Github className="h-5 w-5 text-muted-foreground hover:text-foreground" />
+                        <Github className="h-5 w-5 text-muted-foreground hover:text-blue-400 hover:scale-110 transition-all duration-300" />
                     </Link>
                 </div>
             </div>
