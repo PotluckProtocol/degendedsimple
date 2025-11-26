@@ -6,11 +6,6 @@ import { Toaster } from "@/components/ui/toaster";
 export const metadata: Metadata = {
   title: "DEGENDED MARKETS",
   description: "Decentralized prediction markets on Sonic. Bet on future outcomes with blockchain transparency.",
-  icons: {
-    icon: '/icon.png',
-    apple: '/apple-icon.png',
-    shortcut: '/icon.png',
-  },
   openGraph: {
     title: "DEGENDED MARKETS",
     description: "Decentralized prediction markets on Sonic. Bet on future outcomes with blockchain transparency.",
