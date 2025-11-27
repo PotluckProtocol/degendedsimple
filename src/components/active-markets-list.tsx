@@ -25,7 +25,7 @@ function MarketVolumeFetcher({
   onVolumeFetched: (marketId: number, volume: bigint) => void;
   onMarketChecked: (marketId: number) => void;
 }) {
-  const { data: marketData, isLoading } = useReadContract({
+  const { data: marketData, isLoading, error } = useReadContract({
     contract,
     method: "function getMarketInfo(uint256 _marketId) view returns (string question, string optionA, string optionB, uint256 endTime, uint8 outcome, uint256 totalOptionAShares, uint256 totalOptionBShares, bool resolved)",
     params: [BigInt(marketId)]
@@ -33,26 +33,37 @@ function MarketVolumeFetcher({
 
   // Calculate volume and notify parent
   useEffect(() => {
+    // Mark as checked if we got an error (so we don't wait forever)
+    if (error) {
+      onMarketChecked(marketId);
+      return;
+    }
+
     if (!isLoading && marketData !== undefined) {
       // Always notify that we've checked this market (even if inactive)
       onMarketChecked(marketId);
       
       if (marketData) {
-        const totalOptionAShares = marketData[5] as bigint;
-        const totalOptionBShares = marketData[6] as bigint;
-        const volume = totalOptionAShares + totalOptionBShares;
-        const endTime = marketData[3] as bigint;
-        const resolved = marketData[7] as boolean;
-        const now = BigInt(Math.floor(Date.now() / 1000));
-        
-        // Only count active markets (not expired, not resolved)
-        const isActive = endTime > now && !resolved;
-        if (isActive) {
-          onVolumeFetched(marketId, volume);
+        try {
+          const totalOptionAShares = marketData[5] as bigint;
+          const totalOptionBShares = marketData[6] as bigint;
+          const volume = totalOptionAShares + totalOptionBShares;
+          const endTime = marketData[3] as bigint;
+          const resolved = marketData[7] as boolean;
+          const now = BigInt(Math.floor(Date.now() / 1000));
+          
+          // Only count active markets (not expired, not resolved)
+          const isActive = endTime > now && !resolved;
+          if (isActive) {
+            onVolumeFetched(marketId, volume);
+          }
+        } catch (err) {
+          console.error(`Error processing market ${marketId}:`, err);
+          // Still mark as checked so we don't wait forever
         }
       }
     }
-  }, [marketData, isLoading, marketId, onVolumeFetched, onMarketChecked]);
+  }, [marketData, isLoading, error, marketId, onVolumeFetched, onMarketChecked]);
 
   return null; // This component doesn't render anything
 }
@@ -60,10 +71,19 @@ function MarketVolumeFetcher({
 export function ActiveMarketsList({ 
   marketCount 
 }: { 
-  marketCount: bigint 
+  marketCount: bigint | undefined
 }) {
   const [marketVolumes, setMarketVolumes] = useState<Map<number, bigint>>(new Map());
   const [checkedMarkets, setCheckedMarkets] = useState<Set<number>>(new Set());
+
+  // Handle undefined or invalid marketCount
+  if (!marketCount || marketCount === BigInt(0)) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        No markets found.
+      </div>
+    );
+  }
 
   // Handle volume updates (only for active markets)
   const handleVolumeFetched = useCallback((marketId: number, volume: bigint) => {

@@ -86,7 +86,13 @@ export function EnhancedPredictionMarketDashboard() {
                     ) : (
                         <>
                             <TabsContent value="active">
-                                <ActiveMarketsList marketCount={marketCount} />
+                                {marketCount !== undefined ? (
+                                    <ActiveMarketsList marketCount={marketCount} />
+                                ) : (
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                                        {skeletonCards}
+                                    </div>
+                                )}
                             </TabsContent>
                             
                             <TabsContent value="pending">
