@@ -19,6 +19,7 @@ import { Navbar } from './navbar'
 import { MarketCardSkeleton } from './market-card-skeleton'
 import { Footer } from "./footer"
 import { CreateMarketForm } from './create-market-form'
+import { ContractAddressDisplay } from './contract-address-display'
 
 export function EnhancedPredictionMarketDashboard() {
     const account = useActiveAccount();
@@ -46,6 +47,7 @@ export function EnhancedPredictionMarketDashboard() {
         <div className="min-h-screen flex flex-col">
             <div className="flex-grow container mx-auto p-4">
                 <Navbar />
+                <ContractAddressDisplay />
                 <div className="mb-4">
                     <img 
                         src="/banner.png" 
