@@ -116,7 +116,14 @@ export function ActiveMarketsList({
   }, [marketVolumes]);
 
   // Consider loaded when we've checked all markets
-  const allMarketsLoaded = checkedMarkets.size >= Number(marketCount) && Number(marketCount) > 0;
+  // Also consider loaded if we've checked most markets (80%+) to avoid infinite loading
+  const totalMarkets = Number(marketCount);
+  const checkProgress = totalMarkets > 0 ? checkedMarkets.size / totalMarkets : 0;
+  const allMarketsLoaded = checkedMarkets.size >= totalMarkets && totalMarkets > 0;
+  const mostlyLoaded = checkProgress >= 0.8 && totalMarkets > 0; // At least 80% checked
+  
+  // Use whichever condition is met first
+  const shouldShowMarkets = allMarketsLoaded || mostlyLoaded;
 
   return (
     <>
@@ -131,7 +138,7 @@ export function ActiveMarketsList({
       ))}
 
       {/* Render sorted markets */}
-      {!allMarketsLoaded ? (
+      {!shouldShowMarkets ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {Array.from({ length: Math.min(6, Number(marketCount)) }, (_, i) => (
             <MarketCardSkeleton key={`skeleton-${i}`} />
