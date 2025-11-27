@@ -30,7 +30,7 @@ export function ContractAddressDisplay() {
           <div className="break-all text-gray-400">{contractAddress}</div>
           {isOldContract && (
             <div className="mt-2 text-red-400 text-xs">
-              ⚠️ This contract doesn't support refunds. Update Vercel env var!
+              ⚠️ This contract doesn&apos;t support refunds. Update Vercel env var!
             </div>
           )}
         </div>
