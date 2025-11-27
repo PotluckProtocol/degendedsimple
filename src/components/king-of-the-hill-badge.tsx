@@ -18,12 +18,21 @@ export function KingOfTheHillBadge() {
       <img 
         src="/icon.png" 
         alt="Caveman" 
-        width={16} 
-        height={16} 
-        className="object-contain"
-        style={{ filter: 'brightness(0) invert(1)' }}
+        width={20} 
+        height={20} 
+        className="object-contain flex-shrink-0"
+        style={{ 
+          imageRendering: 'auto',
+          maxWidth: '20px',
+          maxHeight: '20px',
+        }}
+        onError={(e) => {
+          console.error('Failed to load caveman icon:', e);
+          // Fallback: hide the image if it fails to load
+          e.currentTarget.style.display = 'none';
+        }}
       />
-      <span className="font-bold text-xs">KING OF THE HILL</span>
+      <span className="font-bold text-xs whitespace-nowrap">KING OF THE HILL</span>
     </Badge>
   );
 }
