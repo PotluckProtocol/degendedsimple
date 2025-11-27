@@ -11,7 +11,7 @@ import { sonic } from "./chain";
 // Can be set via NEXT_PUBLIC_CONTRACT_ADDRESS environment variable
 export const contractAddress = 
     process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || 
-    "0x39b4bD619ba158b4Cfe61a6FADD900fAb22E930B"; // Latest deployed contract (with 10% fee)
+    "0xC04c1DE26F5b01151eC72183b5615635E609cC81"; // Latest deployed contract (with refund feature)
 
 // USDC Token Contract Address on Sonic Mainnet
 // Used for purchasing shares in prediction markets
