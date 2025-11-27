@@ -3,19 +3,21 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title PredictionMarket
  * @dev A simple prediction market contract where users can buy shares in market outcomes
+ * @notice Supports normal resolution (outcome 1 or 2) and refunds (outcome 3)
  */
-contract PredictionMarket is Ownable {
+contract PredictionMarket is Ownable, ReentrancyGuard {
     // Market structure
     struct Market {
         string question;
         string optionA;
         string optionB;
         uint256 endTime;
-        uint8 outcome; // 0 = unresolved, 1 = optionA won, 2 = optionB won
+        uint8 outcome; // 0 = unresolved, 1 = optionA won, 2 = optionB won, 3 = refund
         uint256 totalOptionAShares;
         uint256 totalOptionBShares;
         bool resolved;
@@ -44,6 +46,7 @@ contract PredictionMarket is Ownable {
     event SharesPurchased(uint256 indexed marketId, address indexed buyer, bool isOptionA, uint256 amount);
     event MarketResolved(uint256 indexed marketId, uint8 outcome);
     event WinningsClaimed(uint256 indexed marketId, address indexed winner, uint256 amount);
+    event RefundClaimed(uint256 indexed marketId, address indexed user, uint256 amount);
 
     /**
      * @param _token Address of the ERC20 token contract (e.g., USDC)
@@ -121,7 +124,7 @@ contract PredictionMarket is Ownable {
      * @param _isOptionA True to buy option A shares, false for option B
      * @param _amount Amount of tokens to spend (1 token = 1 share)
      */
-    function buyShares(uint256 _marketId, bool _isOptionA, uint256 _amount) public {
+    function buyShares(uint256 _marketId, bool _isOptionA, uint256 _amount) public nonReentrant {
         Market storage market = markets[_marketId];
         require(!market.resolved, "Market is resolved");
         require(block.timestamp < market.endTime, "Market has ended");
@@ -145,13 +148,14 @@ contract PredictionMarket is Ownable {
     /**
      * @dev Resolve a market (only owner)
      * @param _marketId The market ID
-     * @param _outcome 1 for optionA, 2 for optionB
+     * @param _outcome 1 for optionA, 2 for optionB, 3 for refund (no fee, returns deposits)
      * @notice Owner can resolve markets early before expiration
+     * @notice Outcome 3 triggers refund mode - users get full deposits back, no protocol fee
      */
     function resolveMarket(uint256 _marketId, uint8 _outcome) public onlyOwner {
         Market storage market = markets[_marketId];
         require(!market.resolved, "Market already resolved");
-        require(_outcome == 1 || _outcome == 2, "Invalid outcome");
+        require(_outcome == 1 || _outcome == 2 || _outcome == 3, "Invalid outcome: 1=OptionA, 2=OptionB, 3=Refund");
         
         market.outcome = _outcome;
         market.resolved = true;
@@ -163,11 +167,13 @@ contract PredictionMarket is Ownable {
      * @dev Claim winnings from a resolved market
      * @param _marketId The market ID
      * @notice 10% protocol fee is deducted and sent to admin wallet
+     * @notice Cannot be used for refunds - use claimRefund() instead
      */
-    function claimWinnings(uint256 _marketId) public {
+    function claimWinnings(uint256 _marketId) public nonReentrant {
         Market storage market = markets[_marketId];
         require(market.resolved, "Market not resolved");
         require(market.outcome != 0, "Market outcome not set");
+        require(market.outcome != 3, "Use claimRefund() for refund markets");
         
         uint256[2] memory userShares = shares[_marketId][msg.sender];
         uint256 winningShares = market.outcome == 1 ? userShares[0] : userShares[1];
@@ -175,6 +181,8 @@ contract PredictionMarket is Ownable {
         
         // Calculate winnings: proportional share of total pool
         uint256 totalShares = market.outcome == 1 ? market.totalOptionAShares : market.totalOptionBShares;
+        require(totalShares > 0, "No shares for winning option");
+        
         uint256 totalPool = market.totalOptionAShares + market.totalOptionBShares;
         uint256 grossWinnings = (totalPool * winningShares) / totalShares;
         
@@ -198,6 +206,31 @@ contract PredictionMarket is Ownable {
         }
         
         emit WinningsClaimed(_marketId, msg.sender, netWinnings);
+    }
+
+    /**
+     * @dev Claim refund from a market resolved with outcome 3 (refund)
+     * @param _marketId The market ID
+     * @notice Returns full deposit amount - NO protocol fee charged
+     * @notice Users can claim refunds for both Option A and Option B shares separately
+     */
+    function claimRefund(uint256 _marketId) public nonReentrant {
+        Market storage market = markets[_marketId];
+        require(market.resolved, "Market not resolved");
+        require(market.outcome == 3, "Market not resolved as refund");
+        
+        uint256[2] memory userShares = shares[_marketId][msg.sender];
+        uint256 totalRefundAmount = userShares[0] + userShares[1];
+        require(totalRefundAmount > 0, "No shares to refund");
+        
+        // Reset all user shares to prevent double claiming
+        shares[_marketId][msg.sender][0] = 0;
+        shares[_marketId][msg.sender][1] = 0;
+        
+        // Transfer full refund amount (no fee)
+        require(token.transfer(msg.sender, totalRefundAmount), "Refund transfer failed");
+        
+        emit RefundClaimed(_marketId, msg.sender, totalRefundAmount);
     }
 
     /**

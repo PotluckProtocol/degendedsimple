@@ -1,76 +1,64 @@
-# Testing Checklist
+# ✅ Testing Checklist
 
-## ✅ Setup Complete!
+## Contract Deployment ✅
 
-Your local development environment is fully configured and running:
+- [ ] Contract deployed on Sonic Mainnet
+- [ ] Contract address copied
+- [ ] Contract verified on explorer
 
-### Running Services
-- ✅ **Next.js App**: http://localhost:3000
-- ✅ **Local Engine**: http://localhost:3005
-- ✅ **PostgreSQL**: Running (database for Engine)
-- ✅ **Redis**: Running (caching for Engine)
+## Environment Setup
 
-### Features Ready to Test
+- [ ] `.env.local` updated with new contract address
+- [ ] Dev server restarted
 
-#### 1. Wallet Connection
-- Connect wallet using thirdweb's ConnectButton
-- Supports email, social login, or traditional wallets
-- Smart wallet creation (no gas fees for users)
+## Refund Feature Testing
 
-#### 2. Token Minting (Claim Tokens)
-- Click "Claim Tokens" button (if available in UI)
-- Mints 100 tokens via local Engine instance
-- Backend wallet: `0xBd01d1D9C9F7475641092A6387FFE9f07237a2E3`
+### Basic Functionality
 
-#### 3. Market Interactions
-- View active, pending, and resolved markets
-- Buy shares in prediction markets
-- Claim rewards from resolved markets
+- [ ] Create a new market
+- [ ] Buy shares (Option A)
+- [ ] Buy shares (Option B)
+- [ ] Resolve market as refund (outcome 3)
+- [ ] Claim refund - receive full deposit back
+- [ ] Verify no protocol fee charged
 
-### Quick Commands
+### Normal Resolution (Control Test)
 
-```bash
-# Check Engine status
-npm run engine:status
+- [ ] Create another market
+- [ ] Buy shares
+- [ ] Resolve normally (outcome 1 or 2)
+- [ ] Claim winnings
+- [ ] Verify 10% protocol fee deducted
 
-# View Engine logs
-npm run engine:logs
+### Edge Cases
 
-# Stop Engine (when done testing)
-npm run engine:stop
+- [ ] Test refund on market with no shares
+- [ ] Test refund on market with only Option A shares
+- [ ] Test refund on market with only Option B shares
+- [ ] Test claiming refund twice (should fail)
+- [ ] Test resolving already resolved market (should fail)
 
-# Start Engine again
-npm run engine:start
-```
+## UI Testing
 
-### Troubleshooting
+- [ ] Refund button appears in admin resolve panel
+- [ ] Refund button has distinct styling (orange)
+- [ ] Refund status shows correctly in resolved markets
+- [ ] Claim refund button shows correct amount
+- [ ] Toast notifications work for refund claims
 
-**If Engine stops:**
-```bash
-npm run engine:start
-```
+## Security Testing
 
-**If you need to restart everything:**
-```bash
-npm run engine:stop
-npm run engine:start
-npm run dev  # in another terminal
-```
+- [ ] Non-owner cannot resolve markets
+- [ ] Non-owner cannot resolve as refund
+- [ ] Users can only claim their own refunds
+- [ ] Double claiming prevented
 
-### Next Steps
+## Documentation
 
-1. Test wallet connection
-2. Test token minting feature
-3. Create a test market (if admin)
-4. Buy shares and test market interactions
-5. Test reward claiming
+- [ ] Update contract address in README
+- [ ] Update deployment docs
+- [ ] Document refund feature for users
 
-### Notes
+---
 
-- All transactions use Sonic Mainnet (Chain ID: 146)
-- USDC token: `0x29219dd400f2Bf60E5a23d13Be72B486D4038894`
-- Market contract: `0x39b4bD619ba158b4Cfe61a6FADD900fAb22E930B`
-- Local Engine is for development only (not for production)
-
-Happy testing! 🚀
-
+**Status**: Ready for testing! 🚀

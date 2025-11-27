@@ -25,7 +25,7 @@ export function MarketResolveAdmin({
     const { mutateAsync: sendTransaction } = useSendAndConfirmTransaction();
     const { toast } = useToast();
     const [isResolving, setIsResolving] = useState(false);
-    const [selectedOutcome, setSelectedOutcome] = useState<1 | 2 | null>(null);
+    const [selectedOutcome, setSelectedOutcome] = useState<1 | 2 | 3 | null>(null);
 
     // Check if current user is the contract owner
     const { data: ownerAddress, isLoading: isLoadingOwner } = useReadContract({
@@ -41,7 +41,7 @@ export function MarketResolveAdmin({
 
     const isOwner = account.address?.toLowerCase() === ownerAddress?.toLowerCase();
 
-    const handleResolve = async (outcome: 1 | 2) => {
+    const handleResolve = async (outcome: 1 | 2 | 3) => {
         if (!isOwner) {
             toast({
                 title: "Unauthorized",
@@ -59,9 +59,17 @@ export function MarketResolveAdmin({
                 params: [BigInt(marketId), outcome]
             });
             await sendTransaction(tx);
+            
+            let description: string;
+            if (outcome === 3) {
+                description = "Market resolved as refund. Users can claim their full deposits back (no fee).";
+            } else {
+                description = `Market resolved: ${outcome === 1 ? optionA : optionB} won.`;
+            }
+            
             toast({
                 title: "Market Resolved!",
-                description: `Market resolved: ${outcome === 1 ? optionA : optionB} won.`,
+                description,
             });
             setSelectedOutcome(null);
         } catch (error: unknown) {
@@ -112,17 +120,28 @@ export function MarketResolveAdmin({
                         {optionB}
                     </Button>
                 </div>
+                <Button
+                    variant={selectedOutcome === 3 ? "default" : "outline"}
+                    className="w-full border-orange-500/50 text-orange-400 hover:bg-orange-500/10"
+                    onClick={() => setSelectedOutcome(3)}
+                    disabled={isResolving}
+                >
+                    💰 Refund (No Fee)
+                </Button>
                 {selectedOutcome && (
                     <Button
                         className="w-full"
                         onClick={() => handleResolve(selectedOutcome)}
                         disabled={isResolving}
+                        variant={selectedOutcome === 3 ? "destructive" : "default"}
                     >
                         {isResolving ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 Resolving...
                             </>
+                        ) : selectedOutcome === 3 ? (
+                            "Resolve as Refund"
                         ) : (
                             `Resolve: ${selectedOutcome === 1 ? optionA : optionB}`
                         )}

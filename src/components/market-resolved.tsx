@@ -38,7 +38,7 @@ export function MarketResolved({
         params: [BigInt(marketId), account?.address as string]
     });
 
-    // Calculate claimable winnings
+    // Calculate claimable amount (winnings or refund)
     useEffect(() => {
         if (!sharesBalanceData || outcome === 0) {
             setClaimableAmount(BigInt(0));
@@ -46,6 +46,15 @@ export function MarketResolved({
         }
 
         const [optionAShares, optionBShares] = sharesBalanceData;
+
+        // If refund (outcome 3), return full deposit amount
+        if (outcome === 3) {
+            const totalRefund = optionAShares + optionBShares;
+            setClaimableAmount(totalRefund);
+            return;
+        }
+
+        // Otherwise, calculate winnings for normal resolution
         const winningShares = outcome === 1 ? optionAShares : optionBShares;
 
         if (winningShares === BigInt(0)) {
@@ -76,8 +85,10 @@ export function MarketResolved({
     const handleClaimRewards = async () => {
         if (claimableAmount === BigInt(0)) {
             toast({
-                title: "No Winnings",
-                description: "You don't have any winning shares to claim.",
+                title: outcome === 3 ? "No Refund Available" : "No Winnings",
+                description: outcome === 3 
+                    ? "You don't have any shares to refund."
+                    : "You don't have any winning shares to claim.",
                 variant: "destructive"
             });
             return;
@@ -85,24 +96,28 @@ export function MarketResolved({
 
         setIsClaiming(true);
         try {
+            // Use claimRefund() for refunds (outcome 3), claimWinnings() otherwise
+            const method = outcome === 3 ? "function claimRefund(uint256 _marketId)" : "function claimWinnings(uint256 _marketId)";
+            
             const tx = await prepareContractCall({
                 contract,
-                method: "function claimWinnings(uint256 _marketId)",
+                method,
                 params: [BigInt(marketId)]
             });
 
             await mutateTransaction(tx);
             
+            const claimType = outcome === 3 ? "Refund" : "Winnings";
             toast({
-                title: "Winnings Claimed!",
-                description: `Successfully claimed ${formatUSDC(claimableAmount, 2)} USDC.`,
+                title: `${claimType} Claimed!`,
+                description: `Successfully claimed ${formatUSDC(claimableAmount, 2)} USDC${outcome === 3 ? " (full refund, no fee)" : ""}.`,
             });
             
             // Reset claimable amount after successful claim
             setClaimableAmount(BigInt(0));
         } catch (error: unknown) {
-            console.error("Error claiming winnings:", error);
-            const errorMessage = error instanceof Error ? error.message : "Failed to claim winnings. Please try again.";
+            console.error(`Error claiming ${outcome === 3 ? "refund" : "winnings"}:`, error);
+            const errorMessage = error instanceof Error ? error.message : `Failed to claim ${outcome === 3 ? "refund" : "winnings"}. Please try again.`;
             toast({
                 title: "Claim Failed",
                 description: errorMessage,
@@ -115,15 +130,20 @@ export function MarketResolved({
 
     const hasWinnings = claimableAmount > BigInt(0);
     const displayAmount = formatUSDC(claimableAmount, 2);
+    const isRefund = outcome === 3;
 
     return (
         <div className="flex flex-col gap-2">
-            <div className="mb-2 bg-green-500/20 border border-green-500/30 p-2 rounded-md text-center text-xs text-green-400">
-                Resolved: {outcome === 1 ? optionA : optionB}
+            <div className={`mb-2 ${isRefund ? 'bg-orange-500/20 border-orange-500/30 text-orange-400' : 'bg-green-500/20 border-green-500/30 text-green-400'} border p-2 rounded-md text-center text-xs`}>
+                {isRefund ? (
+                    <>💰 Refund: Get your full deposit back (no fee)</>
+                ) : (
+                    <>Resolved: {outcome === 1 ? optionA : optionB}</>
+                )}
             </div>
             <Button 
-                variant="outline" 
-                className="w-full" 
+                variant={isRefund ? "outline" : "outline"}
+                className={`w-full ${isRefund ? 'border-orange-500/50 text-orange-400 hover:bg-orange-500/10' : ''}`}
                 onClick={handleClaimRewards}
                 disabled={!hasWinnings || isClaiming}
             >
@@ -133,9 +153,13 @@ export function MarketResolved({
                         Claiming...
                     </>
                 ) : hasWinnings ? (
-                    `Claim ${displayAmount} USDC`
+                    isRefund ? (
+                        `Claim Refund: ${displayAmount} USDC`
+                    ) : (
+                        `Claim ${displayAmount} USDC`
+                    )
                 ) : (
-                    "No Winnings to Claim"
+                    isRefund ? "No Refund to Claim" : "No Winnings to Claim"
                 )}
             </Button>
         </div>
