@@ -1,0 +1,30 @@
+/**
+ * King Of The Hill badge component
+ * Displays a glowing badge with caveman icon for the top market
+ */
+
+'use client'
+import { Badge } from "./ui/badge";
+
+export function KingOfTheHillBadge() {
+  return (
+    <Badge 
+      className="absolute -top-3 -right-3 bg-gradient-to-r from-orange-500 via-orange-600 to-orange-500 text-white border-2 border-orange-400 px-3 py-1.5 shadow-lg z-10 flex items-center gap-1.5"
+      style={{
+        boxShadow: '0 0 20px rgba(249, 115, 22, 0.8), 0 0 40px rgba(249, 115, 22, 0.6)',
+        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      }}
+    >
+      <img 
+        src="/icon.png" 
+        alt="Caveman" 
+        width={16} 
+        height={16} 
+        className="object-contain"
+        style={{ filter: 'brightness(0) invert(1)' }}
+      />
+      <span className="font-bold text-xs">KING OF THE HILL</span>
+    </Badge>
+  );
+}
+

@@ -25,6 +25,8 @@ import { MarketPending } from "./market-pending";
 import { MarketBuyInterface } from "./market-buy-interface";
 import { MarketSharesDisplay } from "./market-shares-display";
 import { MarketResolveAdmin } from "./market-resolve-admin";
+import { KingOfTheHillBadge } from "./king-of-the-hill-badge";
+import { MarketShareButton } from "./market-share-button";
 
 // Props for the MarketCard component
 // index is the market id
@@ -32,6 +34,7 @@ import { MarketResolveAdmin } from "./market-resolve-admin";
 interface MarketCardProps {
   index: number;
   filter: 'active' | 'pending' | 'resolved';
+  isKingOfTheHill?: boolean; // Special styling for top market by volume
 }
 
 // Interface for the market data
@@ -52,7 +55,7 @@ interface SharesBalance {
   optionBShares: bigint;
 }
 
-export function MarketCard({ index, filter }: MarketCardProps) {
+export function MarketCard({ index, filter, isKingOfTheHill = false }: MarketCardProps) {
     // Get the active account
     const account = useActiveAccount();
 
@@ -114,15 +117,33 @@ export function MarketCard({ index, filter }: MarketCardProps) {
         return null;
     }
 
+    // Calculate volume for sorting
+    const volume = market ? market.totalOptionAShares + market.totalOptionBShares : BigInt(0);
+
     return (
-        <Card key={index} className="flex flex-col">
+        <Card 
+            key={index} 
+            className={`flex flex-col relative ${
+                isKingOfTheHill 
+                    ? "border-2 border-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.6)] ring-2 ring-orange-500/50" 
+                    : ""
+            }`}
+        >
+            {isKingOfTheHill && <KingOfTheHillBadge />}
             {isLoadingMarketData ? (
                 <MarketCardSkeleton />
             ) : (
                 <>
                     <CardHeader>
-                        {market && <MarketTime endTime={market.endTime} />}
-                        <CardTitle>{market?.question}</CardTitle>
+                        <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                                {market && <MarketTime endTime={market.endTime} />}
+                                <CardTitle>{market?.question}</CardTitle>
+                            </div>
+                            {market && (
+                                <MarketShareButton marketQuestion={market.question} marketId={index} />
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent>
                         {market && (

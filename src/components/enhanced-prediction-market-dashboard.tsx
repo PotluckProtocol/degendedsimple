@@ -20,6 +20,7 @@ import { MarketCardSkeleton } from './market-card-skeleton'
 import { Footer } from "./footer"
 import { CreateMarketForm } from './create-market-form'
 import { ContractAddressDisplay } from './contract-address-display'
+import { ActiveMarketsList } from './active-markets-list'
 
 export function EnhancedPredictionMarketDashboard() {
     const account = useActiveAccount();
@@ -85,15 +86,7 @@ export function EnhancedPredictionMarketDashboard() {
                     ) : (
                         <>
                             <TabsContent value="active">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                                    {Array.from({ length: Number(marketCount) }, (_, index) => (
-                                        <MarketCard 
-                                            key={index} 
-                                            index={index} 
-                                            filter="active"
-                                        />
-                                    ))}
-                                </div>
+                                <ActiveMarketsList marketCount={marketCount} />
                             </TabsContent>
                             
                             <TabsContent value="pending">
