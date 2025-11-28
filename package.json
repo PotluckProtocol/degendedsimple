@@ -15,7 +15,9 @@
     "engine:logs": "docker compose -f docker-compose.engine.yml logs -f engine",
     "engine:status": "docker compose -f docker-compose.engine.yml ps",
     "engine:create": "npx thirdweb engine create",
-    "engine:list": "npx thirdweb engine list"
+    "engine:list": "npx thirdweb engine list",
+    "telegram:listen": "node scripts/telegram-event-listener.js",
+    "telegram:listen:enhanced": "node scripts/telegram-event-listener-enhanced.js"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.4.0",
@@ -27,6 +29,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.453.0",
     "next": "15.0.1",
+    "node-telegram-bot-api": "^0.66.0",
     "react": "19.0.0-rc-69d4b800-20241021",
     "react-dom": "19.0.0-rc-69d4b800-20241021",
     "tailwind-merge": "^2.5.4",
