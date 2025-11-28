@@ -21,7 +21,7 @@ import { Footer } from "./footer"
 import { CreateMarketForm } from './create-market-form'
 import { ContractAddressDisplay } from './contract-address-display'
 import { ActiveMarketsList } from './active-markets-list'
-import { UserStatistics } from './user-statistics'
+import { ResolvedMarketsList } from './resolved-markets-list'
 import { UserStatistics } from './user-statistics'
 
 export function EnhancedPredictionMarketDashboard() {
@@ -111,15 +111,13 @@ export function EnhancedPredictionMarketDashboard() {
                             </TabsContent>
                             
                             <TabsContent value="resolved">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                                    {Array.from({ length: Number(marketCount) }, (_, index) => (
-                                        <MarketCard 
-                                            key={index} 
-                                            index={index}
-                                            filter="resolved"
-                                        />
-                                    ))}
-                                </div>
+                                {marketCount !== undefined ? (
+                                    <ResolvedMarketsList marketCount={marketCount} />
+                                ) : (
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                                        {skeletonCards}
+                                    </div>
+                                )}
                             </TabsContent>
                         </>
                     )}
