@@ -137,7 +137,7 @@ export function useUserStatistics() {
           if (participation.resolved) {
             // Only process non-refunded resolutions (outcome 1 or 2)
             if (participation.outcome === 1 || participation.outcome === 2) {
-              // Count investment for resolved market in PNL calculation
+              // Count investment for resolved market in PNL calculation (only once)
               resolvedInvested += participation.totalInvested;
 
               // Normal resolution - calculate winnings
@@ -146,7 +146,7 @@ export function useUserStatistics() {
                 : participation.optionBShares;
 
               if (winningShares > BigInt(0)) {
-                // User won
+                // User won - calculate their net winnings
                 const totalShares = participation.outcome === 1
                   ? participation.totalOptionAShares
                   : participation.totalOptionBShares;
@@ -158,13 +158,14 @@ export function useUserStatistics() {
                   const protocolFee = (grossWinnings * PROTOCOL_FEE_BPS) / BigInt(10000);
                   const netWinnings = grossWinnings - protocolFee;
                   
+                  // netWinnings includes original investment + profit
+                  // PNL = netWinnings - investment = profit
                   totalEarned += netWinnings;
                   wins++;
                 }
               } else {
-                // User lost (had shares in the losing option)
-                // Count investment for lost market in PNL
-                resolvedInvested += participation.totalInvested;
+                // User lost - they get nothing back (totalEarned stays 0)
+                // Investment already counted in resolvedInvested above
                 losses++;
               }
             }
