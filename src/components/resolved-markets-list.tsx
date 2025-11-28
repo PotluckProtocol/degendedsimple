@@ -84,17 +84,18 @@ export function ResolvedMarketsList({
     });
   }, []);
 
-  // Sort markets by end time (newest first - descending order)
+  // Sort markets by market ID descending (newest markets first)
+  // Since newer markets (higher IDs) were created more recently,
+  // they're likely to have been resolved more recently as well
   const sortedMarketIds = useMemo(() => {
-    const marketsArray = Array.from(marketEndTimes.entries())
-      .sort(([_, endTimeA], [__, endTimeB]) => {
-        // Sort by endTime descending (newest first)
-        if (endTimeA > endTimeB) return -1;
-        if (endTimeA < endTimeB) return 1;
-        return 0;
+    const marketIds = Array.from(marketEndTimes.keys())
+      .sort((a, b) => {
+        // Sort by market ID descending (newest first)
+        // Higher market ID = created more recently = likely resolved more recently
+        return b - a;
       });
 
-    return marketsArray.map(([marketId]) => marketId);
+    return marketIds;
   }, [marketEndTimes]);
 
   // Consider loaded when we've checked all markets
