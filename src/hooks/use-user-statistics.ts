@@ -117,11 +117,12 @@ export function useUserStatistics() {
 
         await Promise.all(marketPromises);
 
-        // Calculate statistics (exclude refunded markets)
+        // Calculate statistics (exclude refunded markets and unresolved markets from PNL)
         let totalInvested = BigInt(0);
         let wins = 0;
         let losses = 0;
         let totalEarned = BigInt(0);
+        let resolvedInvested = BigInt(0); // Only count investments in resolved markets for PNL
 
         for (const participation of participations) {
           // Skip refunded markets (outcome === 3) - exclude from all stats
@@ -129,11 +130,16 @@ export function useUserStatistics() {
             continue;
           }
 
+          // Count all non-refunded markets in total invested (for display)
           totalInvested += participation.totalInvested;
 
+          // Only include resolved markets in PNL calculation
           if (participation.resolved) {
             // Only process non-refunded resolutions (outcome 1 or 2)
             if (participation.outcome === 1 || participation.outcome === 2) {
+              // Count investment for resolved market in PNL calculation
+              resolvedInvested += participation.totalInvested;
+
               // Normal resolution - calculate winnings
               const winningShares = participation.outcome === 1
                 ? participation.optionAShares
@@ -157,13 +163,16 @@ export function useUserStatistics() {
                 }
               } else {
                 // User lost (had shares in the losing option)
+                // Count investment for lost market in PNL
+                resolvedInvested += participation.totalInvested;
                 losses++;
               }
             }
           }
         }
 
-        const pnl = totalEarned - totalInvested;
+        // PNL only includes resolved markets (excludes unresolved and refunded)
+        const pnl = totalEarned - resolvedInvested;
         const resolvedMarkets = wins + losses;
         const winRate = resolvedMarkets > 0 ? (wins / resolvedMarkets) * 100 : 0;
 
