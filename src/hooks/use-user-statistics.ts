@@ -71,20 +71,21 @@ export function useUserStatistics() {
         const participations: MarketParticipation[] = [];
 
         // Fetch data for all markets in parallel
-        const marketPromises = Array.from({ length: Number(marketCount) }, async (index) => {
+        const marketPromises = Array.from({ length: Number(marketCount) }, async (_, index) => {
           try {
+            const marketId = BigInt(index);
             // Get market info
             const marketData = await readContract({
               contract,
               method: "function getMarketInfo(uint256 _marketId) view returns (string question, string optionA, string optionB, uint256 endTime, uint8 outcome, uint256 totalOptionAShares, uint256 totalOptionBShares, bool resolved)",
-              params: [BigInt(index)]
+              params: [marketId]
             });
 
             // Get user's shares
             const sharesData = await readContract({
               contract,
               method: "function getSharesBalance(uint256 _marketId, address _user) view returns (uint256 optionAShares, uint256 optionBShares)",
-              params: [BigInt(index), userAddress as `0x${string}`]
+              params: [marketId, userAddress as `0x${string}`]
             });
 
             const optionAShares = sharesData[0] as bigint;
@@ -93,12 +94,16 @@ export function useUserStatistics() {
 
             // Only include markets where user has invested
             if (totalInvested > BigInt(0)) {
+              // outcome is uint8, so it's a number (0-255)
+              const outcomeValue = marketData[4];
+              const outcome = typeof outcomeValue === 'bigint' ? Number(outcomeValue) : (outcomeValue as number);
+              
               participations.push({
                 marketId: index,
                 totalInvested,
                 optionAShares,
                 optionBShares,
-                outcome: Number(marketData[4] as bigint),
+                outcome,
                 resolved: marketData[7] as boolean,
                 totalOptionAShares: marketData[5] as bigint,
                 totalOptionBShares: marketData[6] as bigint,
@@ -112,21 +117,23 @@ export function useUserStatistics() {
 
         await Promise.all(marketPromises);
 
-        // Calculate statistics
+        // Calculate statistics (exclude refunded markets)
         let totalInvested = BigInt(0);
         let wins = 0;
         let losses = 0;
         let totalEarned = BigInt(0);
 
         for (const participation of participations) {
+          // Skip refunded markets (outcome === 3) - exclude from all stats
+          if (participation.resolved && participation.outcome === 3) {
+            continue;
+          }
+
           totalInvested += participation.totalInvested;
 
           if (participation.resolved) {
-            // Calculate earnings based on outcome
-            if (participation.outcome === 3) {
-              // Refund - user gets full amount back (no fee)
-              totalEarned += participation.totalInvested;
-            } else if (participation.outcome === 1 || participation.outcome === 2) {
+            // Only process non-refunded resolutions (outcome 1 or 2)
+            if (participation.outcome === 1 || participation.outcome === 2) {
               // Normal resolution - calculate winnings
               const winningShares = participation.outcome === 1
                 ? participation.optionAShares
@@ -160,8 +167,13 @@ export function useUserStatistics() {
         const resolvedMarkets = wins + losses;
         const winRate = resolvedMarkets > 0 ? (wins / resolvedMarkets) * 100 : 0;
 
+        // Count only non-refunded markets
+        const nonRefundedMarkets = participations.filter(
+          (p) => !(p.resolved && p.outcome === 3)
+        ).length;
+
         setStats({
-          totalMarkets: participations.length,
+          totalMarkets: nonRefundedMarkets,
           wins,
           losses,
           totalInvested,
