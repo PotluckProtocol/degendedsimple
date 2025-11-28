@@ -21,6 +21,8 @@ import { Footer } from "./footer"
 import { CreateMarketForm } from './create-market-form'
 import { ContractAddressDisplay } from './contract-address-display'
 import { ActiveMarketsList } from './active-markets-list'
+import { UserStatistics } from './user-statistics'
+import { UserStatistics } from './user-statistics'
 
 export function EnhancedPredictionMarketDashboard() {
     const account = useActiveAccount();
@@ -49,6 +51,7 @@ export function EnhancedPredictionMarketDashboard() {
             <div className="flex-grow container mx-auto p-4">
                 <Navbar />
                 <ContractAddressDisplay />
+                <UserStatistics />
                 <div className="mb-4">
                     <img 
                         src="/banner.png" 
