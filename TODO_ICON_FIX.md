@@ -24,3 +24,4 @@ The caveman icon (`/public/icon.png`) is not loading in the King of the Hill bad
 - Low priority - badge works fine without icon
 - Revisit when convenient
 
+
