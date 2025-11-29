@@ -37,18 +37,22 @@ const sonic = defineChain({
 // Track processed markets
 const processedMarkets = new Map(); // marketId -> { created: bool, resolved: bool }
 
+// Track subscribed chats (groups/channels that want notifications)
+const subscribedChats = new Set(); // Set of chat IDs (strings)
+
 async function main() {
   console.log('🤖 Starting Telegram Event Listener (Enhanced)...');
   console.log('🔧 Using Alchemy RPC for better performance\n');
   
-  // Initialize Telegram bot
-  if (!process.env.TELEGRAM_CHAT_ID) {
-    console.error('❌ TELEGRAM_CHAT_ID not set in .env.local');
-    process.exit(1);
-  }
-
-  const bot = initTelegramBot(process.env.TELEGRAM_CHAT_ID, true); // Enable polling for commands
+  const bot = initTelegramBot(null, true); // Enable polling for commands (chatId not needed for polling)
   console.log('✅ Telegram bot initialized with command support');
+
+  // Initialize subscribed chats from environment variable (can be comma-separated)
+  if (process.env.TELEGRAM_CHAT_ID) {
+    const chatIds = process.env.TELEGRAM_CHAT_ID.split(',').map(id => id.trim()).filter(id => id);
+    chatIds.forEach(chatId => subscribedChats.add(chatId));
+    console.log(`📢 Loaded ${subscribedChats.size} subscribed chat(s) from environment`);
+  }
 
   // Initialize thirdweb client with Alchemy RPC
   const client = createThirdwebClient({
@@ -128,17 +132,49 @@ async function main() {
   });
 
   bot.onText(/\/start|\/help/i, async (msg) => {
+    const chatId = msg.chat.id.toString();
+    const isSubscribed = subscribedChats.has(chatId);
+    
     const helpMessage = `🤖 <b>DEGENDED MARKETS Bot</b>\n\n` +
       `📋 <b>Available Commands:</b>\n\n` +
       `/<b>markets</b> - List all currently open markets\n` +
       `/<b>resolved</b> - Show the latest resolved market\n` +
+      `/<b>subscribe</b> - Subscribe to market notifications\n` +
+      `/<b>unsubscribe</b> - Unsubscribe from notifications\n` +
       `/<b>help</b> - Show this help message\n\n` +
-      `📢 The bot will automatically notify you when:\n` +
+      `📢 ${isSubscribed ? '✅ <b>You are subscribed!</b> You will receive notifications when:\n' : 'Subscribe to receive notifications when:\n'}` +
       `  • New markets are created\n` +
       `  • Markets are resolved (with betting totals)\n\n` +
       `🔗 Visit: ${SITE_URL}`;
     
     await bot.sendMessage(msg.chat.id, helpMessage, { parse_mode: 'HTML' });
+  });
+
+  // Subscribe command - adds the chat to notifications
+  bot.onText(/\/subscribe/i, async (msg) => {
+    try {
+      const chatId = msg.chat.id.toString();
+      const chatType = msg.chat.type; // 'group', 'supergroup', 'channel', 'private'
+      
+      subscribedChats.add(chatId);
+      await bot.sendMessage(msg.chat.id, '✅ <b>Subscribed!</b> You will now receive notifications for new markets and resolutions.', { parse_mode: 'HTML' });
+      console.log(`✅ Chat ${chatId} (${chatType}) subscribed to notifications`);
+    } catch (error) {
+      console.error('Error handling /subscribe:', error);
+    }
+  });
+
+  // Unsubscribe command - removes the chat from notifications
+  bot.onText(/\/unsubscribe/i, async (msg) => {
+    try {
+      const chatId = msg.chat.id.toString();
+      
+      subscribedChats.delete(chatId);
+      await bot.sendMessage(msg.chat.id, '❌ <b>Unsubscribed.</b> You will no longer receive notifications.', { parse_mode: 'HTML' });
+      console.log(`❌ Chat ${chatId} unsubscribed from notifications`);
+    } catch (error) {
+      console.error('Error handling /unsubscribe:', error);
+    }
   });
 
   // Set bot commands for Telegram's command menu (when user types /)
@@ -193,14 +229,14 @@ async function main() {
   // Start polling
   setInterval(async () => {
     try {
-      await checkForNewMarkets(contract);
+      await checkForNewMarkets(contract, bot);
     } catch (error) {
       console.error('Error checking markets:', error);
     }
   }, POLL_INTERVAL);
 
   // Check immediately
-  await checkForNewMarkets(contract);
+  await checkForNewMarkets(contract, bot);
 }
 
 async function getOpenMarkets(contract) {
@@ -250,6 +286,39 @@ async function getOpenMarkets(contract) {
     console.error('Error getting open markets:', error);
     return [];
   }
+}
+
+// Send message to all subscribed chats
+async function sendToAllSubscribedChats(message, botInstance) {
+  if (subscribedChats.size === 0) {
+    console.warn('⚠️  No subscribed chats - message not sent');
+    return;
+  }
+
+  if (!botInstance) {
+    console.error('❌ Bot instance not provided');
+    return;
+  }
+
+  const promises = Array.from(subscribedChats).map(async (chatId) => {
+    try {
+      await botInstance.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        disable_web_page_preview: false,
+      });
+      return { success: true, chatId };
+    } catch (error) {
+      console.error(`❌ Error sending to chat ${chatId}:`, error.message);
+      // If chat is not found or bot was removed, unsubscribe
+      if (error.response && (error.response.statusCode === 403 || error.response.statusCode === 400)) {
+        subscribedChats.delete(chatId);
+        console.log(`🗑️  Removed chat ${chatId} from subscriptions (bot may have been removed)`);
+      }
+      return { success: false, chatId, error: error.message };
+    }
+  });
+
+  await Promise.allSettled(promises);
 }
 
 async function getLatestResolvedMarket(contract) {
@@ -303,7 +372,7 @@ async function getLatestResolvedMarket(contract) {
   }
 }
 
-async function checkForNewMarkets(contract) {
+async function checkForNewMarkets(contract, bot) {
   try {
     // Get current market count
     const marketCount = await readContract({
@@ -357,8 +426,9 @@ async function checkForNewMarkets(contract) {
             `${SITE_URL}/?market=${i}`
           );
 
-          await sendTelegramMessage(message);
-          console.log(`✅ Sent notification for new market #${i}`);
+          // Send to all subscribed chats
+          await sendToAllSubscribedChats(message, bot);
+          console.log(`✅ Sent notification for new market #${i} to ${subscribedChats.size} chat(s)`);
           
           processedMarkets.set(i, { created: true, resolved });
         }
@@ -376,8 +446,9 @@ async function checkForNewMarkets(contract) {
             `${SITE_URL}/?market=${i}`
           );
 
-          await sendTelegramMessage(message);
-          console.log(`✅ Sent notification for resolved market #${i} (outcome: ${outcome})`);
+          // Send to all subscribed chats
+          await sendToAllSubscribedChats(message, bot);
+          console.log(`✅ Sent notification for resolved market #${i} (outcome: ${outcome}) to ${subscribedChats.size} chat(s)`);
           
           // Mark as resolved - we won't check this market again in future polls
           processedMarkets.set(i, { created: true, resolved: true });
