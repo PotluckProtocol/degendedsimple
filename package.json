@@ -40,6 +40,7 @@
     "@nomicfoundation/hardhat-ethers": "^4.0.3",
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",
     "@types/node": "^20",
+    "@types/node-telegram-bot-api": "^0.64.13",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "dotenv": "^17.2.3",
