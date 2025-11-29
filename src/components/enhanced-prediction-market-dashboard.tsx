@@ -22,6 +22,7 @@ import { CreateMarketForm } from './create-market-form'
 import { ContractAddressDisplay } from './contract-address-display'
 import { ActiveMarketsList } from './active-markets-list'
 import { ResolvedMarketsList } from './resolved-markets-list'
+import { UserStatsDashboard } from './user-stats-dashboard'
 
 export function EnhancedPredictionMarketDashboard() {
     const account = useActiveAccount();
@@ -65,12 +66,17 @@ export function EnhancedPredictionMarketDashboard() {
                     />
                 </div>
                 <Tabs defaultValue="active" className="w-full">
-                    <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                    <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'}`}>
                         {isAdmin && <TabsTrigger value="create">Create Market</TabsTrigger>}
+                        <TabsTrigger value="stats">My Stats</TabsTrigger>
                         <TabsTrigger value="active">Active</TabsTrigger>
                         <TabsTrigger value="pending">Pending Resolution</TabsTrigger>
                         <TabsTrigger value="resolved">Resolved</TabsTrigger>
                     </TabsList>
+                    
+                    <TabsContent value="stats" className="mt-6">
+                        <UserStatsDashboard />
+                    </TabsContent>
                     
                     {isAdmin && (
                         <TabsContent value="create" className="mt-6">
