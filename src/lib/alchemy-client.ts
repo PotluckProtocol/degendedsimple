@@ -103,14 +103,15 @@ export async function querySharesPurchasedEvents(userAddress: string) {
   
   const buyerTopic = ethers.utils.hexZeroPad(userAddress, 32);
   
-  const filter: ethers.EventFilter = {
+  // Use type assertion to allow null/undefined in topics (ethers.js accepts this at runtime)
+  const filter = {
     address: contractAddress,
     topics: [
       EVENT_SIGNATURES.SharesPurchased,
       null, // any marketId
       buyerTopic, // specific buyer
     ],
-  };
+  } as ethers.EventFilter;
   
   try {
     const logs = await queryEventsInChunks(provider, filter);
@@ -129,14 +130,15 @@ export async function queryWinningsClaimedEvents(userAddress: string) {
   
   const winnerTopic = ethers.utils.hexZeroPad(userAddress, 32);
   
-  const filter: ethers.EventFilter = {
+  // Use type assertion to allow null/undefined in topics (ethers.js accepts this at runtime)
+  const filter = {
     address: contractAddress,
     topics: [
       EVENT_SIGNATURES.WinningsClaimed,
       null, // any marketId
       winnerTopic, // specific winner
     ],
-  };
+  } as ethers.EventFilter;
   
   try {
     const logs = await queryEventsInChunks(provider, filter);
@@ -155,14 +157,15 @@ export async function queryRefundClaimedEvents(userAddress: string) {
   
   const userTopic = ethers.utils.hexZeroPad(userAddress, 32);
   
-  const filter: ethers.EventFilter = {
+  // Use type assertion to allow null/undefined in topics (ethers.js accepts this at runtime)
+  const filter = {
     address: contractAddress,
     topics: [
       EVENT_SIGNATURES.RefundClaimed,
       null, // any marketId
       userTopic, // specific user
     ],
-  };
+  } as ethers.EventFilter;
   
   try {
     const logs = await queryEventsInChunks(provider, filter);
@@ -179,17 +182,18 @@ export async function queryRefundClaimedEvents(userAddress: string) {
 export async function queryMarketResolvedEvents(marketId?: number) {
   const provider = getProvider();
   
-  const marketIdTopic = marketId !== undefined 
+  const marketIdTopic: string | null = marketId !== undefined 
     ? ethers.utils.hexZeroPad(ethers.BigNumber.from(marketId).toHexString(), 32)
     : null;
   
-  const filter: ethers.EventFilter = {
+  // Use type assertion to allow null/undefined in topics (ethers.js accepts this at runtime)
+  const filter = {
     address: contractAddress,
     topics: [
       EVENT_SIGNATURES.MarketResolved,
       marketIdTopic, // specific marketId or null for all
     ],
-  };
+  } as ethers.EventFilter;
   
   try {
     const logs = await queryEventsInChunks(provider, filter);
