@@ -5,10 +5,10 @@ import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
   title: "DEGENDED MARKETS",
-  description: "Decentralized prediction markets on Sonic. Bet on future outcomes with blockchain transparency.",
+  description: "Prediction markets for the apes. Wanna bet?",
   openGraph: {
     title: "DEGENDED MARKETS",
-    description: "Decentralized prediction markets on Sonic. Bet on future outcomes with blockchain transparency.",
+    description: "Prediction markets for the apes. Wanna bet?",
     url: "https://degendedmarkets.com",
     siteName: "DEGENDED MARKETS",
     images: [
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: "DEGENDED MARKETS",
-    description: "Decentralized prediction markets on Sonic. Bet on future outcomes with blockchain transparency.",
+    description: "Prediction markets for the apes. Wanna bet?",
     images: ['/og-image.png'],
   },
 };
