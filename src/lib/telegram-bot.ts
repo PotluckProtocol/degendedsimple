@@ -126,7 +126,7 @@ export function formatMarketResolvedMessage(
   const totalPoolFormatted = (totalPool / 1e6).toFixed(2);
 
   let message = `🏁 <b>Market Resolved!</b>\n\n`;
-  message += `📊 <b>Market #{marketId}</b>\n\n`;
+  message += `📊 <b>Market #${marketId}</b>\n\n`;
   message += `❓ <b>Question:</b> ${escapeHtml(question)}\n\n`;
 
   if (outcome === 1) {
@@ -134,6 +134,58 @@ export function formatMarketResolvedMessage(
   } else if (outcome === 2) {
     message += `✅ <b>Winner: ${escapeHtml(optionB)}</b>\n\n`;
   } else if (outcome === 3) {
+    message += `🔄 <b>Refunded</b>\n\n`;
+  }
+
+  message += `📈 <b>Betting Results:</b>\n`;
+  message += `   ✅ Yes: $${totalYes}\n`;
+  message += `   ❌ No: $${totalNo}\n`;
+  message += `   💰 Total Pool: $${totalPoolFormatted}\n`;
+
+  if (marketUrl) {
+    message += `\n🔗 <a href="${marketUrl}">View Market →</a>`;
+  }
+
+  return message;
+}
+
+/**
+ * Format latest resolved market message
+ */
+export function formatLatestResolvedMessage(
+  market: {
+    marketId: number;
+    question: string;
+    outcome: number;
+    optionA: string;
+    optionB: string;
+    totalOptionAShares: bigint;
+    totalOptionBShares: bigint;
+  } | null,
+  marketUrl?: string
+): string {
+  if (!market) {
+    return '📊 <b>No Resolved Markets</b>\n\nThere are currently no resolved markets.';
+  }
+
+  const formatUSDC = (amount: bigint) => {
+    return (Number(amount) / 1e6).toFixed(2);
+  };
+
+  const totalYes = formatUSDC(market.totalOptionAShares);
+  const totalNo = formatUSDC(market.totalOptionBShares);
+  const totalPool = Number(market.totalOptionAShares) + Number(market.totalOptionBShares);
+  const totalPoolFormatted = (totalPool / 1e6).toFixed(2);
+
+  let message = `🏁 <b>Latest Resolved Market</b>\n\n`;
+  message += `📊 <b>Market #${market.marketId}</b>\n\n`;
+  message += `❓ <b>Question:</b> ${escapeHtml(market.question)}\n\n`;
+
+  if (market.outcome === 1) {
+    message += `✅ <b>Winner: ${escapeHtml(market.optionA)}</b>\n\n`;
+  } else if (market.outcome === 2) {
+    message += `✅ <b>Winner: ${escapeHtml(market.optionB)}</b>\n\n`;
+  } else if (market.outcome === 3) {
     message += `🔄 <b>Refunded</b>\n\n`;
   }
 

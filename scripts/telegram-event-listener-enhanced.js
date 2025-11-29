@@ -12,7 +12,8 @@ const {
   formatMarketCreatedMessage, 
   formatMarketResolvedMessage,
   initTelegramBot,
-  formatOpenMarketsMessage 
+  formatOpenMarketsMessage,
+  formatLatestResolvedMessage 
 } = require('../lib/telegram-bot');
 
 // Configuration
@@ -43,6 +44,17 @@ async function main() {
 
   const bot = initTelegramBot(process.env.TELEGRAM_CHAT_ID, true); // Enable polling for commands
   console.log('✅ Telegram bot initialized with command support');
+
+  // Initialize thirdweb client with Alchemy RPC
+  const client = createThirdwebClient({
+    clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID,
+  });
+
+  const contract = getContract({
+    client,
+    chain: sonic,
+    address: CONTRACT_ADDRESS,
+  });
 
   // Set up command handlers
   bot.onText(/\/markets|\/open|\/active/i, async (msg) => {
@@ -88,10 +100,33 @@ async function main() {
     }
   });
 
+  bot.onText(/\/resolved/i, async (msg) => {
+    try {
+      const chatId = msg.chat.id.toString();
+      
+      // Send "fetching" message
+      await bot.sendMessage(chatId, '🔍 Fetching latest resolved market...', { parse_mode: 'HTML' });
+      
+      // Fetch latest resolved market
+      const latestResolved = await getLatestResolvedMarket(contract);
+      const message = formatLatestResolvedMessage(latestResolved, latestResolved ? `${SITE_URL}/?market=${latestResolved.marketId}` : undefined);
+      
+      await bot.sendMessage(chatId, message, { parse_mode: 'HTML', disable_web_page_preview: false });
+    } catch (error) {
+      console.error('Error handling /resolved command:', error);
+      try {
+        await bot.sendMessage(msg.chat.id, '❌ Error fetching resolved market. Please try again later.');
+      } catch (e) {
+        // Ignore
+      }
+    }
+  });
+
   bot.onText(/\/start|\/help/i, async (msg) => {
     const helpMessage = `🤖 <b>DEGENDED MARKETS Bot</b>\n\n` +
       `📋 <b>Available Commands:</b>\n\n` +
-      `/<b>markets</b> or /<b>open</b> - List all currently open markets\n` +
+      `/<b>markets</b> - List all currently open markets\n` +
+      `/<b>resolved</b> - Show the latest resolved market\n` +
       `/<b>help</b> - Show this help message\n\n` +
       `📢 The bot will automatically notify you when:\n` +
       `  • New markets are created\n` +
@@ -101,16 +136,17 @@ async function main() {
     await bot.sendMessage(msg.chat.id, helpMessage, { parse_mode: 'HTML' });
   });
 
-  // Initialize thirdweb client with Alchemy RPC
-  const client = createThirdwebClient({
-    clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID,
-  });
-
-  const contract = getContract({
-    client,
-    chain: sonic,
-    address: CONTRACT_ADDRESS,
-  });
+  // Set bot commands for Telegram's command menu (when user types /)
+  try {
+    await bot.setMyCommands([
+      { command: 'markets', description: 'List all currently open markets' },
+      { command: 'resolved', description: 'Show the latest resolved market' },
+      { command: 'help', description: 'Show available commands' },
+    ]);
+    console.log('✅ Bot commands registered with Telegram');
+  } catch (error) {
+    console.warn('⚠️ Could not set bot commands (this is optional):', error.message);
+  }
 
   console.log(`📡 Listening to contract: ${CONTRACT_ADDRESS}`);
   console.log(`🔄 Polling interval: ${POLL_INTERVAL / 1000} seconds`);
@@ -192,6 +228,57 @@ async function getOpenMarkets(contract) {
   } catch (error) {
     console.error('Error getting open markets:', error);
     return [];
+  }
+}
+
+async function getLatestResolvedMarket(contract) {
+  try {
+    // Get market count
+    const marketCount = await readContract({
+      contract,
+      method: 'function marketCount() view returns (uint256)',
+      params: [],
+    });
+
+    const count = Number(marketCount);
+    let latestResolved = null;
+    let latestMarketId = -1;
+
+    // Check each market from newest to oldest
+    for (let i = count - 1; i >= 0; i--) {
+      try {
+        const marketData = await readContract({
+          contract,
+          method: 'function getMarketInfo(uint256 _marketId) view returns (string question, string optionA, string optionB, uint256 endTime, uint8 outcome, uint256 totalOptionAShares, uint256 totalOptionBShares, bool resolved)',
+          params: [BigInt(i)],
+        });
+
+        const resolved = marketData[7];
+        const outcome = Number(marketData[4]);
+
+        // Include if resolved (outcome 1, 2, or 3)
+        if (resolved && (outcome === 1 || outcome === 2 || outcome === 3)) {
+          latestResolved = {
+            marketId: i,
+            question: marketData[0],
+            optionA: marketData[1],
+            optionB: marketData[2],
+            outcome: outcome,
+            totalOptionAShares: marketData[5],
+            totalOptionBShares: marketData[6],
+          };
+          latestMarketId = i;
+          break; // Found the latest resolved market
+        }
+      } catch (error) {
+        console.error(`Error fetching market ${i}:`, error.message);
+      }
+    }
+
+    return latestResolved;
+  } catch (error) {
+    console.error('Error getting latest resolved market:', error);
+    return null;
   }
 }
 
