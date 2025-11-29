@@ -4,7 +4,12 @@
  * Also supports /markets command to list open markets
  */
 
-require('dotenv').config({ path: '.env.local' });
+// Load environment variables - try .env.local first (local dev), then fall back to process.env (Railway/production)
+try {
+  require('dotenv').config({ path: '.env.local' });
+} catch (e) {
+  // In production (Railway), environment variables are set directly
+}
 const { createThirdwebClient, getContract, readContract } = require('thirdweb');
 const { defineChain } = require('thirdweb/chains');
 const { 
@@ -152,19 +157,35 @@ async function main() {
   console.log(`🔄 Polling interval: ${POLL_INTERVAL / 1000} seconds`);
   console.log(`🌐 RPC: ${ALCHEMY_RPC_URL ? 'Alchemy' : 'Default'}\n`);
 
-  // Get initial market count
+  // Get initial market count and mark resolved markets
   try {
     const initialCount = await readContract({
       contract,
       method: 'function marketCount() view returns (uint256)',
       params: [],
     });
-    console.log(`📊 Current market count: ${initialCount}`);
+    const count = Number(initialCount);
+    console.log(`📊 Current market count: ${count}`);
     
-    // Mark existing markets as already processed
-    for (let i = 0; i < Number(initialCount); i++) {
-      processedMarkets.set(i, { created: true, resolved: false });
+    // Check each existing market to see if it's resolved
+    // This prevents us from checking resolved markets in future polls
+    let resolvedCount = 0;
+    for (let i = 0; i < count; i++) {
+      try {
+        const marketData = await readContract({
+          contract,
+          method: 'function getMarketInfo(uint256 _marketId) view returns (string question, string optionA, string optionB, uint256 endTime, uint8 outcome, uint256 totalOptionAShares, uint256 totalOptionBShares, bool resolved)',
+          params: [BigInt(i)],
+        });
+        const resolved = marketData[7];
+        processedMarkets.set(i, { created: true, resolved });
+        if (resolved) resolvedCount++;
+      } catch (error) {
+        // If we can't read a market, mark it as created but not resolved (will be skipped if it errors)
+        processedMarkets.set(i, { created: true, resolved: false });
+      }
     }
+    console.log(`📊 Found ${resolvedCount} already resolved markets (will be skipped in future checks)`);
   } catch (error) {
     console.warn('Could not fetch initial market count:', error.message);
   }
@@ -292,18 +313,29 @@ async function checkForNewMarkets(contract) {
     });
 
     const count = Number(marketCount);
+    let checkedCount = 0;
+    let skippedCount = 0;
 
     // Check each market
     for (let i = 0; i < count; i++) {
       const marketInfo = processedMarkets.get(i) || { created: false, resolved: false };
 
+      // Skip markets that are already resolved and we've notified about them
+      // We only need to check unresolved markets or newly created markets
+      if (marketInfo.resolved) {
+        skippedCount++;
+        continue; // Skip already resolved markets
+      }
+
       try {
-        // Get market data
+        // Get market data only for unresolved markets
         const marketData = await readContract({
           contract,
           method: 'function getMarketInfo(uint256 _marketId) view returns (string question, string optionA, string optionB, uint256 endTime, uint8 outcome, uint256 totalOptionAShares, uint256 totalOptionBShares, bool resolved)',
           params: [BigInt(i)],
         });
+
+        checkedCount++;
 
         const question = marketData[0];
         const optionA = marketData[1];
@@ -347,9 +379,10 @@ async function checkForNewMarkets(contract) {
           await sendTelegramMessage(message);
           console.log(`✅ Sent notification for resolved market #${i} (outcome: ${outcome})`);
           
+          // Mark as resolved - we won't check this market again in future polls
           processedMarkets.set(i, { created: true, resolved: true });
         } else if (resolved) {
-          // Update resolved status even if we already notified
+          // Update resolved status even if we already notified (shouldn't happen now, but keep as safeguard)
           processedMarkets.set(i, { created: marketInfo.created, resolved: true });
         }
 
@@ -358,7 +391,7 @@ async function checkForNewMarkets(contract) {
       }
     }
 
-    console.log(`⏰ Checked ${count} markets at ${new Date().toLocaleTimeString()}`);
+    console.log(`⏰ Checked ${checkedCount} unresolved markets (skipped ${skippedCount} resolved) at ${new Date().toLocaleTimeString()}`);
 
   } catch (error) {
     console.error('Error in checkForNewMarkets:', error);
