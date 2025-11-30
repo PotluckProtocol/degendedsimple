@@ -1,7 +1,7 @@
 /**
  * Resolved Markets List Component
  * 
- * Fetches all resolved markets and displays them sorted by end time (newest first)
+ * Fetches resolved markets with pagination, sorted by market ID (newest first)
  */
 
 'use client'
@@ -10,12 +10,17 @@ import { contract } from '@/constants/contract';
 import { MarketCard } from './marketCard';
 import { MarketCardSkeleton } from './market-card-skeleton';
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { readContract } from 'thirdweb';
+import { Button } from './ui/button';
 
 interface MarketData {
   marketId: number;
   endTime: bigint;
 }
+
+// Markets to load per page
+const MARKETS_PER_PAGE = 30;
+// Initial batch size for first load (start from highest IDs, work backwards)
+const INITIAL_BATCH_SIZE = 50;
 
 // Component to fetch end time for a single resolved market
 function ResolvedMarketFetcher({
@@ -65,6 +70,10 @@ export function ResolvedMarketsList({
 }) {
   const [marketEndTimes, setMarketEndTimes] = useState<Map<number, bigint>>(new Map());
   const [checkedMarkets, setCheckedMarkets] = useState<Set<number>>(new Set());
+  const [displayedCount, setDisplayedCount] = useState(MARKETS_PER_PAGE);
+  const [checkedRange, setCheckedRange] = useState(INITIAL_BATCH_SIZE);
+
+  const totalMarkets = Number(marketCount);
 
   // Handle end time updates (only for resolved markets)
   const handleMarketFetched = useCallback((marketId: number, endTime: bigint) => {
@@ -98,13 +107,47 @@ export function ResolvedMarketsList({
     return marketIds;
   }, [marketEndTimes]);
 
-  // Consider loaded when we've checked all markets
-  const allMarketsLoaded = checkedMarkets.size >= Number(marketCount) && Number(marketCount) > 0;
+  // Get markets to display (paginated)
+  const displayedMarketIds = useMemo(() => {
+    return sortedMarketIds.slice(0, displayedCount);
+  }, [sortedMarketIds, displayedCount]);
+
+  // Check if we need to load more
+  const hasMoreMarkets = displayedMarketIds.length < sortedMarketIds.length;
+  const hasMoreToCheck = checkedRange < totalMarkets;
+  const needsMoreData = displayedMarketIds.length < MARKETS_PER_PAGE && hasMoreToCheck;
+
+  // Expand search range if we don't have enough markets yet
+  // Start from highest IDs and work backwards (newest first)
+  useEffect(() => {
+    if (needsMoreData && checkedRange < totalMarkets) {
+      // Expand by another batch
+      setCheckedRange(prev => Math.min(prev + INITIAL_BATCH_SIZE, totalMarkets));
+    }
+  }, [needsMoreData, checkedRange, totalMarkets, displayedMarketIds.length]);
+
+  // Load more markets to display
+  const handleLoadMore = useCallback(() => {
+    setDisplayedCount(prev => prev + MARKETS_PER_PAGE);
+    // Also expand search range if needed
+    if (checkedRange < totalMarkets) {
+      setCheckedRange(prev => Math.min(prev + INITIAL_BATCH_SIZE, totalMarkets));
+    }
+  }, [checkedRange, totalMarkets]);
+
+  // Markets we're currently checking (from highest IDs downwards)
+  // Start from newest markets first (better UX - shows recent resolved markets)
+  const marketsToCheck = useMemo(() => {
+    if (totalMarkets === 0) return [];
+    const start = Math.max(0, totalMarkets - checkedRange);
+    const end = totalMarkets;
+    return Array.from({ length: end - start }, (_, i) => end - 1 - i);
+  }, [totalMarkets, checkedRange]);
 
   return (
     <>
-      {/* Fetch end times for all markets */}
-      {Array.from({ length: Number(marketCount) }, (_, index) => (
+      {/* Fetch end times for markets in current range */}
+      {marketsToCheck.map((index) => (
         <ResolvedMarketFetcher
           key={`resolved-${index}`}
           marketId={index}
@@ -114,28 +157,53 @@ export function ResolvedMarketsList({
       ))}
 
       {/* Render sorted markets */}
-      {!allMarketsLoaded ? (
+      {displayedMarketIds.length === 0 && checkedMarkets.size < Math.min(INITIAL_BATCH_SIZE, totalMarkets) ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {Array.from({ length: Math.min(6, Number(marketCount)) }, (_, i) => (
+          {Array.from({ length: Math.min(6, totalMarkets) }, (_, i) => (
             <MarketCardSkeleton key={`skeleton-${i}`} />
           ))}
         </div>
-      ) : sortedMarketIds.length === 0 ? (
+      ) : displayedMarketIds.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           No resolved markets found.
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {sortedMarketIds.map((marketId) => (
-            <MarketCard
-              key={marketId}
-              index={marketId}
-              filter="resolved"
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {displayedMarketIds.map((marketId) => (
+              <MarketCard
+                key={marketId}
+                index={marketId}
+                filter="resolved"
+              />
+            ))}
+          </div>
+          
+          {/* Load More Button */}
+          {(hasMoreMarkets || hasMoreToCheck) && (
+            <div className="flex justify-center mt-8">
+              <Button
+                onClick={handleLoadMore}
+                variant="outline"
+                className="min-w-[200px]"
+              >
+                {hasMoreMarkets 
+                  ? `Load More Markets (${sortedMarketIds.length - displayedMarketIds.length} more)`
+                  : hasMoreToCheck
+                  ? `Search More Markets...`
+                  : 'Load More'}
+              </Button>
+            </div>
+          )}
+          
+          {displayedMarketIds.length > 0 && (
+            <div className="text-center text-sm text-muted-foreground mt-4">
+              Showing {displayedMarketIds.length} of {sortedMarketIds.length} resolved markets
+              {hasMoreToCheck && ` (searched ${checkedRange} of ${totalMarkets} total markets)`}
+            </div>
+          )}
+        </>
       )}
     </>
   );
 }
-

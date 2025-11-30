@@ -1,5 +1,5 @@
 /**
- * Active Markets List - Fetches all active markets, sorts by volume
+ * Active Markets List - Fetches active markets with pagination
  * Shows King of the Hill on the top market
  */
 
@@ -9,11 +9,17 @@ import { contract } from '@/constants/contract';
 import { MarketCard } from './marketCard';
 import { MarketCardSkeleton } from './market-card-skeleton';
 import { useState, useCallback, useMemo, useEffect } from 'react';
+import { Button } from './ui/button';
 
 interface MarketVolumeData {
   marketId: number;
   volume: bigint;
 }
+
+// Markets to load per page
+const MARKETS_PER_PAGE = 30;
+// Initial batch size for first load
+const INITIAL_BATCH_SIZE = 50;
 
 // Component to fetch volume for a single market
 function MarketVolumeFetcher({ 
@@ -59,7 +65,6 @@ function MarketVolumeFetcher({
           }
         } catch (err) {
           console.error(`Error processing market ${marketId}:`, err);
-          // Still mark as checked so we don't wait forever
         }
       }
     }
@@ -75,6 +80,8 @@ export function ActiveMarketsList({
 }) {
   const [marketVolumes, setMarketVolumes] = useState<Map<number, bigint>>(new Map());
   const [checkedMarkets, setCheckedMarkets] = useState<Set<number>>(new Set());
+  const [displayedCount, setDisplayedCount] = useState(MARKETS_PER_PAGE);
+  const [checkedRange, setCheckedRange] = useState(INITIAL_BATCH_SIZE);
 
   // Handle undefined or invalid marketCount
   if (!marketCount || marketCount === BigInt(0)) {
@@ -84,6 +91,8 @@ export function ActiveMarketsList({
       </div>
     );
   }
+
+  const totalMarkets = Number(marketCount);
 
   // Handle volume updates (only for active markets)
   const handleVolumeFetched = useCallback((marketId: number, volume: bigint) => {
@@ -115,20 +124,40 @@ export function ActiveMarketsList({
     return volumesArray.map(([marketId]) => marketId);
   }, [marketVolumes]);
 
-  // Consider loaded when we've checked all markets
-  // Also consider loaded if we've checked most markets (80%+) to avoid infinite loading
-  const totalMarkets = Number(marketCount);
-  const checkProgress = totalMarkets > 0 ? checkedMarkets.size / totalMarkets : 0;
-  const allMarketsLoaded = checkedMarkets.size >= totalMarkets && totalMarkets > 0;
-  const mostlyLoaded = checkProgress >= 0.8 && totalMarkets > 0; // At least 80% checked
-  
-  // Use whichever condition is met first
-  const shouldShowMarkets = allMarketsLoaded || mostlyLoaded;
+  // Get markets to display (paginated)
+  const displayedMarketIds = useMemo(() => {
+    return sortedMarketIds.slice(0, displayedCount);
+  }, [sortedMarketIds, displayedCount]);
+
+  // Check if we need to load more markets to find enough active ones
+  const hasMoreMarkets = displayedMarketIds.length < sortedMarketIds.length;
+  const hasMoreToCheck = checkedRange < totalMarkets;
+  const needsMoreData = displayedMarketIds.length < MARKETS_PER_PAGE && hasMoreToCheck;
+
+  // Expand search range if we don't have enough markets yet
+  useEffect(() => {
+    if (needsMoreData && checkedRange < totalMarkets) {
+      // Expand by another batch
+      setCheckedRange(prev => Math.min(prev + INITIAL_BATCH_SIZE, totalMarkets));
+    }
+  }, [needsMoreData, checkedRange, totalMarkets, displayedMarketIds.length]);
+
+  // Load more markets to display
+  const handleLoadMore = useCallback(() => {
+    setDisplayedCount(prev => prev + MARKETS_PER_PAGE);
+    // Also expand search range if needed
+    if (checkedRange < totalMarkets) {
+      setCheckedRange(prev => Math.min(prev + INITIAL_BATCH_SIZE, totalMarkets));
+    }
+  }, [checkedRange, totalMarkets]);
+
+  // Markets we're currently checking (paginated range)
+  const marketsToCheck = Array.from({ length: Math.min(checkedRange, totalMarkets) }, (_, i) => i);
 
   return (
     <>
-      {/* Fetch volumes for all markets */}
-      {Array.from({ length: Number(marketCount) }, (_, index) => (
+      {/* Fetch volumes for markets in current range */}
+      {marketsToCheck.map((index) => (
         <MarketVolumeFetcher
           key={`volume-${index}`}
           marketId={index}
@@ -138,29 +167,54 @@ export function ActiveMarketsList({
       ))}
 
       {/* Render sorted markets */}
-      {!shouldShowMarkets ? (
+      {displayedMarketIds.length === 0 && checkedMarkets.size < Math.min(INITIAL_BATCH_SIZE, totalMarkets) ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {Array.from({ length: Math.min(6, Number(marketCount)) }, (_, i) => (
+          {Array.from({ length: Math.min(6, totalMarkets) }, (_, i) => (
             <MarketCardSkeleton key={`skeleton-${i}`} />
           ))}
         </div>
-      ) : sortedMarketIds.length === 0 ? (
+      ) : displayedMarketIds.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           No active markets found.
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {sortedMarketIds.map((marketId, index) => (
-            <MarketCard
-              key={marketId}
-              index={marketId}
-              filter="active"
-              isKingOfTheHill={index === 0} // First one (highest volume) is King of the Hill
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {displayedMarketIds.map((marketId, index) => (
+              <MarketCard
+                key={marketId}
+                index={marketId}
+                filter="active"
+                isKingOfTheHill={index === 0} // First one (highest volume) is King of the Hill
+              />
+            ))}
+          </div>
+          
+          {/* Load More Button */}
+          {(hasMoreMarkets || hasMoreToCheck) && (
+            <div className="flex justify-center mt-8">
+              <Button
+                onClick={handleLoadMore}
+                variant="outline"
+                className="min-w-[200px]"
+              >
+                {hasMoreMarkets 
+                  ? `Load More Markets (${sortedMarketIds.length - displayedMarketIds.length} more)`
+                  : hasMoreToCheck
+                  ? `Search More Markets...`
+                  : 'Load More'}
+              </Button>
+            </div>
+          )}
+          
+          {displayedMarketIds.length > 0 && (
+            <div className="text-center text-sm text-muted-foreground mt-4">
+              Showing {displayedMarketIds.length} of {sortedMarketIds.length} active markets
+              {hasMoreToCheck && ` (searching through ${checkedRange} of ${totalMarkets} total markets)`}
+            </div>
+          )}
+        </>
       )}
     </>
   );
 }
-
