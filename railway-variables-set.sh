@@ -5,7 +5,7 @@
 echo "📝 Setting Railway Environment Variables..."
 echo ""
 
-railway variables --set "TELEGRAM_BOT_TOKEN=8585450134:AAFPdFpO8KSCZhQ_fXGJnY9EpA5cfSLzjyA" \
+railway variables --set "TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-YOUR_TELEGRAM_BOT_TOKEN_HERE}" \
   --set "TELEGRAM_CHAT_ID=372188992" \
   --set "NEXT_PUBLIC_CONTRACT_ADDRESS=0xC04c1DE26F5b01151eC72183b5615635E609cC81" \
   --set "NEXT_PUBLIC_SITE_URL=https://degended.bet" \

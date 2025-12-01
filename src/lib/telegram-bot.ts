@@ -5,7 +5,7 @@
 
 import TelegramBot from 'node-telegram-bot-api';
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8585450134:AAFPdFpO8KSCZhQ_fXGJnY9EpA5cfSLzjyA';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID; // Optional: set default chat ID
 
 let bot: TelegramBot | null = null;
@@ -16,6 +16,10 @@ let bot: TelegramBot | null = null;
 export function initTelegramBot(chatId?: string): TelegramBot {
   if (bot) {
     return bot;
+  }
+
+  if (!TELEGRAM_BOT_TOKEN) {
+    throw new Error('TELEGRAM_BOT_TOKEN environment variable is required');
   }
 
   bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: false });
