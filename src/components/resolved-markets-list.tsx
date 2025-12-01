@@ -74,6 +74,7 @@ export function ResolvedMarketsList({
   const [checkedMarkets, setCheckedMarkets] = useState<Set<number>>(new Set());
   const [displayedCount, setDisplayedCount] = useState(MARKETS_PER_PAGE);
   const [checkedRange, setCheckedRange] = useState(INITIAL_BATCH_SIZE);
+  const [showAllMarkets, setShowAllMarkets] = useState(false); // Track if user wants to see all markets
   const highlightRef = useRef<HTMLDivElement>(null);
   const hasScrolled = useRef(false);
 
@@ -113,9 +114,10 @@ export function ResolvedMarketsList({
 
   // Get markets to display (paginated)
   // If highlightMarketId is specified, show ONLY that market (isolated view)
+  // Unless showAllMarkets is true (user clicked "Load More Markets")
   const displayedMarketIds = useMemo(() => {
-    if (highlightMarketId !== undefined) {
-      // If we're highlighting a specific market, show ONLY that market
+    if (highlightMarketId !== undefined && !showAllMarkets) {
+      // If we're highlighting a specific market and user hasn't clicked "Load More", show ONLY that market
       const hasHighlightMarket = sortedMarketIds.includes(highlightMarketId);
       
       if (hasHighlightMarket) {
@@ -126,9 +128,9 @@ export function ResolvedMarketsList({
         return [];
       }
     }
-    // Normal pagination when no specific market is highlighted
+    // Normal pagination when no specific market is highlighted OR user clicked "Load More"
     return sortedMarketIds.slice(0, displayedCount);
-  }, [sortedMarketIds, displayedCount, highlightMarketId]);
+  }, [sortedMarketIds, displayedCount, highlightMarketId, showAllMarkets]);
 
   // Check if we need to load more
   const hasMoreMarkets = displayedMarketIds.length < sortedMarketIds.length;
@@ -167,12 +169,22 @@ export function ResolvedMarketsList({
 
   // Load more markets to display
   const handleLoadMore = useCallback(() => {
-    setDisplayedCount(prev => prev + MARKETS_PER_PAGE);
-    // Also expand search range if needed
-    if (checkedRange < totalMarkets) {
-      setCheckedRange(prev => Math.min(prev + INITIAL_BATCH_SIZE, totalMarkets));
+    // If we're in isolated view, switch to showing all markets
+    if (highlightMarketId !== undefined && !showAllMarkets) {
+      setShowAllMarkets(true);
+      // Ensure we have enough markets checked
+      if (checkedRange < totalMarkets) {
+        setCheckedRange(prev => Math.min(prev + INITIAL_BATCH_SIZE, totalMarkets));
+      }
+    } else {
+      // Normal pagination
+      setDisplayedCount(prev => prev + MARKETS_PER_PAGE);
+      // Also expand search range if needed
+      if (checkedRange < totalMarkets) {
+        setCheckedRange(prev => Math.min(prev + INITIAL_BATCH_SIZE, totalMarkets));
+      }
     }
-  }, [checkedRange, totalMarkets]);
+  }, [checkedRange, totalMarkets, highlightMarketId, showAllMarkets]);
 
   // Markets we're currently checking (from highest IDs downwards)
   // Start from newest markets first (better UX - shows recent resolved markets)
@@ -245,21 +257,26 @@ export function ResolvedMarketsList({
           </div>
           
           {/* Load More Button */}
-          {(hasMoreMarkets || hasMoreToCheck) && (
+          {/* Show button if: 
+              - In isolated view (to switch to all markets), OR
+              - Normal pagination (has more markets to load) */}
+          {(highlightMarketId !== undefined && !showAllMarkets) || (hasMoreMarkets || hasMoreToCheck) ? (
             <div className="flex justify-center mt-8">
               <Button
                 onClick={handleLoadMore}
                 variant="outline"
                 className="min-w-[200px]"
               >
-                {hasMoreMarkets 
+                {highlightMarketId !== undefined && !showAllMarkets
+                  ? `Load More Markets (${sortedMarketIds.length - 1} more)`
+                  : hasMoreMarkets 
                   ? `Load More Markets (${sortedMarketIds.length - displayedMarketIds.length} more)`
                   : hasMoreToCheck
                   ? `Search More Markets...`
                   : 'Load More'}
               </Button>
             </div>
-          )}
+          ) : null}
           
           {displayedMarketIds.length > 0 && (
             <div className="text-center text-sm text-muted-foreground mt-4">

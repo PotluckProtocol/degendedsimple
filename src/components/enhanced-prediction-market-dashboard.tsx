@@ -23,11 +23,20 @@ import { ContractAddressDisplay } from './contract-address-display'
 import { ActiveMarketsList } from './active-markets-list'
 import { ResolvedMarketsList } from './resolved-markets-list'
 import { UserStatsDashboard } from './user-stats-dashboard'
-import { useSearchParams } from 'next/navigation'
-import { useEffect, useState, useMemo } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { useEffect, useState, useMemo, Suspense } from 'react'
+
+function NavbarWrapper() {
+    return (
+        <Suspense fallback={<div className="flex justify-between items-center mb-6"><div>DEGENDED MARKETS</div></div>}>
+            <Navbar />
+        </Suspense>
+    );
+}
 
 export function EnhancedPredictionMarketDashboard() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const account = useActiveAccount();
     const [defaultTab, setDefaultTab] = useState<string>('active');
     
@@ -105,20 +114,26 @@ export function EnhancedPredictionMarketDashboard() {
     return (
         <div className="min-h-screen flex flex-col">
             <div className="flex-grow container mx-auto p-4">
-                <Navbar />
+                <NavbarWrapper />
                 <ContractAddressDisplay />
                 <div className="mb-4">
                     <img 
                         src="/banner.png" 
                         alt="DEGENDED MARKETS Banner" 
-                        className="w-full h-auto rounded-xl border-2 border-primary/30 shadow-2xl shadow-primary/20" 
+                        className={`w-full h-auto rounded-xl border-2 border-primary/30 shadow-2xl shadow-primary/20 ${marketIdParam ? 'cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
                         style={{
                             boxShadow: '0 25px 50px -12px rgba(59, 130, 246, 0.25), 0 0 0 1px rgba(59, 130, 246, 0.1)'
+                        }}
+                        onClick={() => {
+                            if (marketIdParam) {
+                                router.push('/');
+                            }
                         }}
                         onError={(e) => {
                             // Fallback to placeholder if image not found
                             e.currentTarget.src = "https://placehold.co/800x300/1e3a8a/60a5fa?text=DEGENDED+MARKETS";
                         }}
+                        title={marketIdParam ? 'Click to return to home' : ''}
                     />
                 </div>
                 <Tabs defaultValue={defaultTab} value={defaultTab} onValueChange={setDefaultTab} className="w-full">
