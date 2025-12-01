@@ -118,7 +118,7 @@ async function main() {
       
       // Fetch latest resolved market
       const latestResolved = await getLatestResolvedMarket(contract);
-      const message = formatLatestResolvedMessage(latestResolved, latestResolved ? `${SITE_URL}/?market=${latestResolved.marketId}` : undefined);
+      const message = formatLatestResolvedMessage(latestResolved, latestResolved ? `${SITE_URL}/?market=${latestResolved.marketId}&tab=resolved` : undefined);
       
       await bot.sendMessage(chatId, message, { parse_mode: 'HTML', disable_web_page_preview: false });
     } catch (error) {
@@ -443,7 +443,7 @@ async function checkForNewMarkets(contract, bot) {
             optionB,
             totalOptionAShares,
             totalOptionBShares,
-            `${SITE_URL}/?market=${i}`
+            `${SITE_URL}/?market=${i}&tab=resolved`
           );
 
           // Send to all subscribed chats

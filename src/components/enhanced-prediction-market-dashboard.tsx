@@ -23,14 +23,70 @@ import { ContractAddressDisplay } from './contract-address-display'
 import { ActiveMarketsList } from './active-markets-list'
 import { ResolvedMarketsList } from './resolved-markets-list'
 import { UserStatsDashboard } from './user-stats-dashboard'
+import { useSearchParams } from 'next/navigation'
+import { useEffect, useState, useMemo } from 'react'
 
 export function EnhancedPredictionMarketDashboard() {
+    const searchParams = useSearchParams();
     const account = useActiveAccount();
+    const [defaultTab, setDefaultTab] = useState<string>('active');
+    
     const { data: marketCount, isLoading: isLoadingMarketCount } = useReadContract({
         contract,
         method: "function marketCount() view returns (uint256)",
         params: []
     });
+    
+    // Get market ID from URL parameter
+    const marketIdParam = useMemo(() => {
+        const market = searchParams.get('market');
+        const tab = searchParams.get('tab');
+        if (market) {
+            const id = parseInt(market, 10);
+            if (!isNaN(id) && id >= 0) {
+                // If tab is explicitly set, use it; otherwise we'll detect it
+                if (tab && ['active', 'pending', 'resolved'].includes(tab)) {
+                    return { id, tab };
+                }
+                return { id, tab: null };
+            }
+        }
+        return null;
+    }, [searchParams]);
+    
+    // Check market status to determine which tab to show
+    const { data: marketData } = useReadContract({
+        contract,
+        method: "function getMarketInfo(uint256 _marketId) view returns (string question, string optionA, string optionB, uint256 endTime, uint8 outcome, uint256 totalOptionAShares, uint256 totalOptionBShares, bool resolved)",
+        params: marketIdParam?.id !== undefined ? [BigInt(marketIdParam.id)] : [],
+        queryOptions: {
+            enabled: marketIdParam?.id !== undefined && marketIdParam.tab === null
+        }
+    });
+    
+    // Determine tab based on market status
+    useEffect(() => {
+        if (marketIdParam?.tab) {
+            // Tab explicitly set in URL
+            setDefaultTab(marketIdParam.tab);
+        } else if (marketIdParam?.id !== undefined && marketData) {
+            // Auto-detect tab based on market status
+            const isResolved = marketData[7] as boolean;
+            const endTime = marketData[3] as bigint;
+            const isExpired = new Date(Number(endTime) * 1000) < new Date();
+            
+            if (isResolved) {
+                setDefaultTab('resolved');
+            } else if (isExpired) {
+                setDefaultTab('pending');
+            } else {
+                setDefaultTab('active');
+            }
+        } else {
+            // Default to active tab if no market ID
+            setDefaultTab('active');
+        }
+    }, [marketIdParam, marketData]);
     
     // Check if current user is the contract owner (admin)
     const { data: ownerAddress } = useReadContract({
@@ -65,7 +121,7 @@ export function EnhancedPredictionMarketDashboard() {
                         }}
                     />
                 </div>
-                <Tabs defaultValue="active" className="w-full">
+                <Tabs defaultValue={defaultTab} value={defaultTab} onValueChange={setDefaultTab} className="w-full">
                     <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'}`}>
                         {isAdmin && <TabsTrigger value="create">Create Market</TabsTrigger>}
                         <TabsTrigger value="stats">My Stats</TabsTrigger>
