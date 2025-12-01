@@ -66,3 +66,4 @@ Test in Telegram:
 - `/help` - Show commands
 - `/markets` - List open markets
 - `/resolved` - Latest resolved market
+

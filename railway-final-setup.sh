@@ -39,3 +39,4 @@ echo ""
 echo "📊 Useful commands:"
 echo "   railway logs      - View logs"
 echo "   railway status    - Check status"
+

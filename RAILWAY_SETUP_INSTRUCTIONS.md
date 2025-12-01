@@ -75,3 +75,4 @@ You should see:
 - **"Project not found"**: Verify project ID is correct
 - **Bot not responding**: Check logs with `railway logs`
 - **Missing env vars**: Run the setup script again or check in Railway dashboard
+

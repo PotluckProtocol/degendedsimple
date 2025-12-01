@@ -66,3 +66,4 @@ Users can now:
 3. All calculated from on-chain events (accurate!)
 
 The implementation is **ready to use** for wallets with recent activity!
+

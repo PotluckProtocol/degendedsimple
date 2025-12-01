@@ -104,3 +104,4 @@
 - Railway free tier: $5 credit/month (usually enough for a simple bot)
 - Usage-based pricing after free tier
 - The bot uses minimal resources (just polling every 60 seconds)
+

@@ -151,3 +151,4 @@ The "Pending" tab in the dashboard still loads all markets:
 
 The frontend now scales efficiently regardless of how many markets exist in the contract.
 
+

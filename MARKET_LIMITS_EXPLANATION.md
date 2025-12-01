@@ -211,3 +211,4 @@ uint256 public constant MAX_MARKETS = 10000;
 
 The contract limit is a **band-aid** - the real fix is improving the frontend architecture.
 
+

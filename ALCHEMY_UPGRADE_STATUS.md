@@ -58,3 +58,4 @@ The updated code:
 For 4 event types: ~20-40 seconds initial load
 **Solution**: Add loading states and optimize/cache queries
 
+

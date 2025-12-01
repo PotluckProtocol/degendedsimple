@@ -151,3 +151,4 @@ The contract is relatively secure for a simple prediction market, but has room f
 **Recommendation**: Add refund functionality and the high-priority security improvements before deploying a new version.
 
 
+

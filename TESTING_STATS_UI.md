@@ -135,3 +135,4 @@ Everything works correctly if:
 
 **Ready to test! Open http://localhost:3000 and check the "My Stats" tab** 🚀
 
+

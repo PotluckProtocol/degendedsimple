@@ -75,3 +75,4 @@ The stats collection is:
 - ✅ Ready to display in dashboard
 
 **Users can now view their complete trading statistics!**
+

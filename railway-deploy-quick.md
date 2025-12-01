@@ -46,3 +46,4 @@ Your bot is now running 24/7 on Railway. Test it in Telegram with `/help`, `/mar
 
 ---
 **Note**: The API key you provided (0776545a-0fa0-4000-b8fa-a25ac2e3b123) can be used in Railway's dashboard under Project Settings if you want to link via CLI later.
+

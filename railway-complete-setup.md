@@ -68,3 +68,4 @@ You should see:
 - ✅ Telegram bot initialized with command support
 - ✅ Bot commands registered with Telegram
 - 📡 Listening to contract: 0xC04c1DE26F5b01151eC72183b5615635E609cC81
+

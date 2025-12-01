@@ -5,7 +5,7 @@
 
 import TelegramBot from 'node-telegram-bot-api';
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8585450134:AAETwTPdZxLBSmiBktQRcPl2tTzMrMA9Phs';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8585450134:AAFPdFpO8KSCZhQ_fXGJnY9EpA5cfSLzjyA';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID; // Optional: set default chat ID
 
 let bot: TelegramBot | null = null;

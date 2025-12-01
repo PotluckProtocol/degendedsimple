@@ -34,3 +34,4 @@ echo "Finally, deploy:"
 echo "   railway up"
 echo ""
 echo "Or deploy via Railway Dashboard - see RAILWAY_DEPLOY.md for instructions"
+
