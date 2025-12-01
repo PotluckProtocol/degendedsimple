@@ -172,7 +172,10 @@ export function EnhancedPredictionMarketDashboard() {
                             
                             <TabsContent value="resolved">
                                 {marketCount !== undefined ? (
-                                    <ResolvedMarketsList marketCount={marketCount} />
+                                    <ResolvedMarketsList 
+                                        marketCount={marketCount} 
+                                        highlightMarketId={defaultTab === 'resolved' && marketIdParam?.id !== undefined ? marketIdParam.id : undefined}
+                                    />
                                 ) : (
                                     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                                         {skeletonCards}

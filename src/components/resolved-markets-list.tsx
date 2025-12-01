@@ -9,7 +9,7 @@ import { useReadContract } from 'thirdweb/react';
 import { contract } from '@/constants/contract';
 import { MarketCard } from './marketCard';
 import { MarketCardSkeleton } from './market-card-skeleton';
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 
 interface MarketData {
@@ -64,14 +64,18 @@ function ResolvedMarketFetcher({
 }
 
 export function ResolvedMarketsList({
-  marketCount
+  marketCount,
+  highlightMarketId
 }: {
-  marketCount: bigint
+  marketCount: bigint;
+  highlightMarketId?: number;
 }) {
   const [marketEndTimes, setMarketEndTimes] = useState<Map<number, bigint>>(new Map());
   const [checkedMarkets, setCheckedMarkets] = useState<Set<number>>(new Set());
   const [displayedCount, setDisplayedCount] = useState(MARKETS_PER_PAGE);
   const [checkedRange, setCheckedRange] = useState(INITIAL_BATCH_SIZE);
+  const highlightRef = useRef<HTMLDivElement>(null);
+  const hasScrolled = useRef(false);
 
   const totalMarkets = Number(marketCount);
 
@@ -108,9 +112,23 @@ export function ResolvedMarketsList({
   }, [marketEndTimes]);
 
   // Get markets to display (paginated)
+  // If highlightMarketId is specified, show ONLY that market (isolated view)
   const displayedMarketIds = useMemo(() => {
+    if (highlightMarketId !== undefined) {
+      // If we're highlighting a specific market, show ONLY that market
+      const hasHighlightMarket = sortedMarketIds.includes(highlightMarketId);
+      
+      if (hasHighlightMarket) {
+        // Return only the highlighted market
+        return [highlightMarketId];
+      } else {
+        // Market not found yet, return empty array (will show loading)
+        return [];
+      }
+    }
+    // Normal pagination when no specific market is highlighted
     return sortedMarketIds.slice(0, displayedCount);
-  }, [sortedMarketIds, displayedCount]);
+  }, [sortedMarketIds, displayedCount, highlightMarketId]);
 
   // Check if we need to load more
   const hasMoreMarkets = displayedMarketIds.length < sortedMarketIds.length;
@@ -119,12 +137,33 @@ export function ResolvedMarketsList({
 
   // Expand search range if we don't have enough markets yet
   // Start from highest IDs and work backwards (newest first)
+  // Also expand if we need to find the highlighted market
   useEffect(() => {
-    if (needsMoreData && checkedRange < totalMarkets) {
+    const needsHighlightMarket = highlightMarketId !== undefined && 
+      !sortedMarketIds.includes(highlightMarketId) && 
+      checkedRange < totalMarkets;
+    
+    if ((needsMoreData || needsHighlightMarket) && checkedRange < totalMarkets) {
       // Expand by another batch
       setCheckedRange(prev => Math.min(prev + INITIAL_BATCH_SIZE, totalMarkets));
     }
-  }, [needsMoreData, checkedRange, totalMarkets, displayedMarketIds.length]);
+  }, [needsMoreData, checkedRange, totalMarkets, displayedMarketIds.length, highlightMarketId, sortedMarketIds]);
+
+  // Scroll to highlighted market when it becomes available
+  useEffect(() => {
+    if (highlightMarketId !== undefined && 
+        displayedMarketIds.includes(highlightMarketId) && 
+        highlightRef.current && 
+        !hasScrolled.current) {
+      setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+        hasScrolled.current = true;
+      }, 500); // Small delay to ensure DOM is ready
+    }
+  }, [highlightMarketId, displayedMarketIds]);
 
   // Load more markets to display
   const handleLoadMore = useCallback(() => {
@@ -137,12 +176,22 @@ export function ResolvedMarketsList({
 
   // Markets we're currently checking (from highest IDs downwards)
   // Start from newest markets first (better UX - shows recent resolved markets)
+  // If highlightMarketId is specified, ensure we check that market too
   const marketsToCheck = useMemo(() => {
     if (totalMarkets === 0) return [];
     const start = Math.max(0, totalMarkets - checkedRange);
     const end = totalMarkets;
-    return Array.from({ length: end - start }, (_, i) => end - 1 - i);
-  }, [totalMarkets, checkedRange]);
+    const rangeMarkets = Array.from({ length: end - start }, (_, i) => end - 1 - i);
+    
+    // If we need to highlight a specific market, ensure it's in the check list
+    if (highlightMarketId !== undefined && highlightMarketId >= 0 && highlightMarketId < totalMarkets) {
+      if (!rangeMarkets.includes(highlightMarketId)) {
+        return [...rangeMarkets, highlightMarketId];
+      }
+    }
+    
+    return rangeMarkets;
+  }, [totalMarkets, checkedRange, highlightMarketId]);
 
   return (
     <>
@@ -164,18 +213,34 @@ export function ResolvedMarketsList({
           ))}
         </div>
       ) : displayedMarketIds.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          No resolved markets found.
-        </div>
+        highlightMarketId !== undefined ? (
+          <div className="text-center py-12">
+            <div className="text-muted-foreground mb-4">
+              Loading market #{highlightMarketId}...
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              <MarketCardSkeleton />
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            No resolved markets found.
+          </div>
+        )
       ) : (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {displayedMarketIds.map((marketId) => (
-              <MarketCard
+              <div
                 key={marketId}
-                index={marketId}
-                filter="resolved"
-              />
+                ref={highlightMarketId === marketId ? highlightRef : null}
+                className={highlightMarketId === marketId ? 'ring-4 ring-primary ring-offset-2 rounded-lg transition-all' : ''}
+              >
+                <MarketCard
+                  index={marketId}
+                  filter="resolved"
+                />
+              </div>
             ))}
           </div>
           
