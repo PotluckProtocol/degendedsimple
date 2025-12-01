@@ -58,7 +58,7 @@ export function EnhancedPredictionMarketDashboard() {
     const { data: marketData } = useReadContract({
         contract,
         method: "function getMarketInfo(uint256 _marketId) view returns (string question, string optionA, string optionB, uint256 endTime, uint8 outcome, uint256 totalOptionAShares, uint256 totalOptionBShares, bool resolved)",
-        params: marketIdParam?.id !== undefined ? [BigInt(marketIdParam.id)] : [],
+        params: marketIdParam?.id !== undefined ? [BigInt(marketIdParam.id)] : [BigInt(0)],
         queryOptions: {
             enabled: marketIdParam?.id !== undefined && marketIdParam.tab === null
         }
