@@ -3,7 +3,7 @@
  * Fetches and calculates user statistics from on-chain events
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ethers } from 'ethers';
 import {
   querySharesPurchasedEvents,
@@ -44,6 +44,10 @@ const CONTRACT_ABI = [
   'event MarketResolved(uint256 indexed marketId, uint8 outcome)',
 ];
 
+// Cache for user stats to prevent redundant API calls
+const statsCache = new Map<string, { stats: UserStats; timestamp: number }>();
+const CACHE_TTL = 30000; // Cache for 30 seconds
+
 export function useUserStats(userAddress: string | undefined) {
   const [stats, setStats] = useState<UserStats>({
     totalInvested: BigInt(0),
@@ -60,35 +64,74 @@ export function useUserStats(userAddress: string | undefined) {
     error: null,
   });
 
-  const fetchStats = useCallback(async () => {
+  const fetchingRef = useRef(false); // Prevent concurrent fetches
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchStats = useCallback(async (forceRefresh: boolean = false) => {
     if (!userAddress) {
       setStats((prev) => ({ ...prev, isLoading: false }));
       return;
     }
 
+    // Clear any pending debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Prevent concurrent fetches
+    if (fetchingRef.current) {
+      return;
+    }
+
+    // Check cache first (unless forcing refresh)
+    if (!forceRefresh) {
+      const cached = statsCache.get(userAddress);
+      const now = Date.now();
+      if (cached && (now - cached.timestamp) < CACHE_TTL) {
+        setStats(cached.stats);
+        return;
+      }
+    } else {
+      // Clear cache on forced refresh
+      statsCache.delete(userAddress);
+    }
+
     try {
+      fetchingRef.current = true;
       setStats((prev) => ({ ...prev, isLoading: true, error: null }));
 
       // Create contract interface for decoding events
       const iface = new ethers.utils.Interface(CONTRACT_ABI);
 
-      // Query all events
-      const [purchaseLogs, winningsLogs, refundLogs, resolvedLogs] = await Promise.all([
-        querySharesPurchasedEvents(userAddress),
-        queryWinningsClaimedEvents(userAddress),
-        queryRefundClaimedEvents(userAddress),
-        queryMarketResolvedEvents(),
-      ]);
-
-      // Decode events - convert BigNumber to BigInt
+      // OPTIMIZATION: Query purchases first to get market IDs user participated in
+      // Then only query resolved events for those specific markets (much more efficient)
+      const purchaseLogs = await querySharesPurchasedEvents(userAddress);
+      
+      // Decode purchases to get market IDs
       const purchases = purchaseLogs.map((log) => {
         const decoded = iface.decodeEventLog('SharesPurchased', log.data, log.topics);
         return {
           marketId: decoded.marketId.toNumber(),
-          amount: BigInt(decoded.amount.toString()), // Convert BigNumber to BigInt
+          amount: BigInt(decoded.amount.toString()),
           isOptionA: decoded.isOptionA,
         };
       });
+
+      // Get unique market IDs user participated in
+      const userMarketIds = Array.from(new Set(purchases.map(p => p.marketId)));
+
+      // OPTIMIZATION: Only query resolved events for markets user participated in
+      // This reduces from querying ALL markets to just the user's markets
+      // Also query winnings and refunds in parallel
+      const [winningsLogs, refundLogs, resolvedLogs] = await Promise.all([
+        queryWinningsClaimedEvents(userAddress),
+        queryRefundClaimedEvents(userAddress),
+        userMarketIds.length > 0 
+          ? queryMarketResolvedEvents(userMarketIds) // Only query user's markets
+          : Promise.resolve([]), // No markets, no need to query
+      ]);
+
+      // Purchases already decoded above
 
       const winnings = winningsLogs.map((log) => {
         const decoded = iface.decodeEventLog('WinningsClaimed', log.data, log.topics);
@@ -187,7 +230,7 @@ export function useUserStats(userAddress: string | undefined) {
         (m) => !m.isResolved && m.invested > BigInt(0)
       ).length;
 
-      setStats({
+      const finalStats: UserStats = {
         totalInvested,
         totalEarned,
         totalRefunded,
@@ -200,7 +243,11 @@ export function useUserStats(userAddress: string | undefined) {
         markets,
         isLoading: false,
         error: null,
-      });
+      };
+
+      // Cache the results
+      statsCache.set(userAddress, { stats: finalStats, timestamp: Date.now() });
+      setStats(finalStats);
     } catch (error) {
       console.error('Error fetching user stats:', error);
       setStats((prev) => ({
@@ -208,13 +255,33 @@ export function useUserStats(userAddress: string | undefined) {
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to fetch stats',
       }));
+    } finally {
+      fetchingRef.current = false;
     }
   }, [userAddress]);
 
   useEffect(() => {
-    fetchStats();
+    // Debounce rapid re-fetches (e.g., when address changes quickly)
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      fetchStats();
+    }, 300); // 300ms debounce
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
   }, [fetchStats]);
 
-  return { ...stats, refetch: fetchStats };
+  // Refetch function that forces a refresh (clears cache)
+  const refetch = useCallback(() => {
+    fetchStats(true);
+  }, [fetchStats]);
+
+  return { ...stats, refetch };
 }
 
