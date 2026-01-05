@@ -92,15 +92,16 @@ async function syncEvents(provider) {
 
   try {
     const res = await pool.query("SELECT last_block FROM sync_state WHERE key = 'events'");
-    let startBlock = res.rows[0]?.last_block || 56668150; // Default to deployment block (Sonic Mainnet)
+    let startBlock = res.rows[0]?.last_block || 56668150; 
     const currentBlock = await provider.getBlockNumber();
     
     if (startBlock >= currentBlock) return;
 
-    // Sonic limits: 10M block range is safe for specific filters on BlockPi
-    const endBlock = Math.min(startBlock + 10000000, currentBlock);
+    // Use a safe chunk size that works for both Alchemy (10k limit) and BlockPi
+    const CHUNK_SIZE = 10000; 
+    const endBlock = Math.min(startBlock + CHUNK_SIZE, currentBlock);
     
-    console.log(`🔍 Syncing events from block ${startBlock} to ${endBlock}...`);
+    console.log(`🔍 Syncing events: ${startBlock} -> ${endBlock} (Target: ${currentBlock})...`);
 
     const logs = await provider.getLogs({
       address: CONTRACT_ADDRESS,
