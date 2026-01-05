@@ -60,76 +60,54 @@ async function queryEventsInChunks(
 ): Promise<ethers.providers.Log[]> {
   try {
     const currentBlock = await getCachedBlockNumber(provider);
-    let chunkSize = 10000; // Try 10k blocks first (10x larger chunks = 10x fewer calls)
     
-    // Start from contract deployment block (most efficient - captures ALL history)
-    // Or from a fixed range if deployment block not available
+    // Start from contract deployment block
     const startBlock = startFromDeployment && CONTRACT_DEPLOYMENT_BLOCK 
       ? CONTRACT_DEPLOYMENT_BLOCK
-      : Math.max(0, currentBlock - 100000); // Fallback: last 100k blocks
+      : Math.max(0, currentBlock - 200000); // Fallback: last 200k blocks
+    
+    // OPTIMIZATION: For specific filters (like user address in topics), 
+    // we can use much larger chunks. Most providers allow 100k+ block ranges 
+    // for specific filters.
+    const isSpecificFilter = filter.topics && filter.topics.length > 1 && filter.topics[1] !== null;
+    let chunkSize = isSpecificFilter ? 500000 : 50000; 
     
     const allLogs: ethers.providers.Log[] = [];
+    let from = startBlock;
     
-    // Calculate number of chunks needed
-    let totalChunks = Math.ceil((currentBlock - startBlock) / chunkSize);
-    
-    // Try with larger chunks first
-    let lastError: any = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (attempt === 1) {
-        // Fallback to smaller chunks if large chunks fail
-        chunkSize = 1000;
-        totalChunks = Math.ceil((currentBlock - startBlock) / chunkSize);
-      }
+    while (from <= currentBlock) {
+      const to = Math.min(from + chunkSize - 1, currentBlock);
       
-      allLogs.length = 0; // Reset logs
-      let hasError = false;
-      
-      // Query in chunks
-      for (let i = 0; i < totalChunks; i++) {
-        const from = startBlock + (i * chunkSize);
-        const to = Math.min(from + chunkSize - 1, currentBlock);
+      try {
+        const chunkLogs = await provider.getLogs({
+          ...filter,
+          fromBlock: from,
+          toBlock: to,
+        });
         
-        try {
-          const chunkLogs = await provider.getLogs({
-            ...filter,
-            fromBlock: from,
-            toBlock: to,
-          });
-          
-          allLogs.push(...chunkLogs);
-          
-          // Small delay to avoid rate limiting (only between chunks)
-          if (i < totalChunks - 1) {
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
-        } catch (chunkError: any) {
-          // Check if it's a block range error (chunk too large)
-          const isBlockRangeError = chunkError.message?.includes('block range') ||
-                                    chunkError.body?.includes('block range') ||
-                                    chunkError.message?.includes('query returned more than');
-          
-          if (isBlockRangeError && attempt === 0) {
-            // Large chunk failed, break and retry with smaller chunks
-            hasError = true;
-            lastError = chunkError;
-            break;
-          } else if (!isBlockRangeError) {
-            // Non-block-range error - log but continue
-            console.warn(`⚠️  Error querying blocks ${from}-${to}:`, chunkError.message?.substring(0, 100));
-          }
+        allLogs.push(...chunkLogs);
+        from = to + 1;
+        
+        // Small delay to avoid rate limiting
+        if (from <= currentBlock) {
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+      } catch (chunkError: any) {
+        // If block range is too large or too many results, decrease chunk size and retry
+        const isRangeError = chunkError.message?.toLowerCase().includes('block range') ||
+                             chunkError.message?.toLowerCase().includes('too many results') ||
+                             chunkError.body?.toLowerCase().includes('block range');
+        
+        if (isRangeError && chunkSize > 1000) {
+          chunkSize = Math.floor(chunkSize / 2);
+          // Don't increment 'from', just retry with smaller chunk
+          continue;
+        } else {
+          // Non-range error, log and skip this chunk to avoid infinite loop
+          console.warn(`⚠️ Error querying blocks ${from}-${to}:`, chunkError.message?.substring(0, 100));
+          from = to + 1;
         }
       }
-      
-      // If no errors or we're on the fallback attempt, return results
-      if (!hasError || attempt === 1) {
-        return allLogs;
-      }
-    }
-    
-    // If we get here, both attempts had issues
-    if (lastError) {
-      throw lastError;
     }
     
     return allLogs;
@@ -221,65 +199,39 @@ export async function queryRefundClaimedEvents(userAddress: string) {
 }
 
 /**
- * Query MarketResolved events for specific market IDs (much more efficient than querying all)
- * If marketIds is provided, only queries those specific markets
- * If marketIds is empty/undefined, queries all resolved markets (less efficient)
+ * Query MarketResolved events
+ * Optimized to query all resolved events in one go with chunking
  */
 export async function queryMarketResolvedEvents(marketIds?: number[]) {
   const provider = getProvider();
   
-  // If specific market IDs provided, query only those (much more efficient)
-  if (marketIds && marketIds.length > 0) {
-    // Query each market ID separately but batch them
-    const allLogs: ethers.providers.Log[] = [];
-    
-    // Batch queries: query multiple market IDs in parallel
-    const queries = marketIds.map(async (marketId) => {
-      const marketIdTopic = ethers.utils.hexZeroPad(ethers.BigNumber.from(marketId).toHexString(), 32);
-      const filter = {
-        address: contractAddress,
-        topics: [
-          EVENT_SIGNATURES.MarketResolved,
-          marketIdTopic, // specific marketId
-        ],
-      } as ethers.EventFilter;
-      
-      try {
-        // For specific market IDs, we can query from deployment block in one go
-        // since there should be at most one resolved event per market
-        const currentBlock = await provider.getBlockNumber();
-        const startBlock = CONTRACT_DEPLOYMENT_BLOCK || Math.max(0, currentBlock - 100000);
-        
-        const logs = await provider.getLogs({
-          ...filter,
-          fromBlock: startBlock,
-          toBlock: currentBlock,
-        });
-        
-        return logs;
-      } catch (error) {
-        console.warn(`Error querying MarketResolved for market ${marketId}:`, error);
-        return [];
-      }
-    });
-    
-    const results = await Promise.all(queries);
-    results.forEach(logs => allLogs.push(...logs));
-    
-    return allLogs;
-  }
-  
-  // Fallback: query all resolved markets (less efficient, but needed if no marketIds provided)
   const filter = {
     address: contractAddress,
     topics: [
       EVENT_SIGNATURES.MarketResolved,
-      null, // any marketId
     ],
   } as ethers.EventFilter;
   
   try {
+    // Query all resolved events using our optimized chunking
     const logs = await queryEventsInChunks(provider, filter);
+    
+    // If specific market IDs provided, filter locally
+    if (marketIds && marketIds.length > 0) {
+      const iface = new ethers.utils.Interface([
+        'event MarketResolved(uint256 indexed marketId, uint8 outcome)'
+      ]);
+      
+      return logs.filter(log => {
+        try {
+          const decoded = iface.decodeEventLog('MarketResolved', log.data, log.topics);
+          return marketIds.includes(decoded.marketId.toNumber());
+        } catch (e) {
+          return false;
+        }
+      });
+    }
+    
     return logs;
   } catch (error) {
     console.error('Error querying MarketResolved events:', error);

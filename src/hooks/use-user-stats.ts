@@ -46,22 +46,54 @@ const CONTRACT_ABI = [
 
 // Cache for user stats to prevent redundant API calls
 const statsCache = new Map<string, { stats: UserStats; timestamp: number }>();
-const CACHE_TTL = 30000; // Cache for 30 seconds
+const CACHE_TTL = 60000; // Cache for 60 seconds
+
+// Local storage key prefix
+const STORAGE_KEY_PREFIX = 'user_stats_';
 
 export function useUserStats(userAddress: string | undefined) {
-  const [stats, setStats] = useState<UserStats>({
-    totalInvested: BigInt(0),
-    totalEarned: BigInt(0),
-    totalRefunded: BigInt(0),
-    pnl: BigInt(0),
-    wins: 0,
-    losses: 0,
-    winRatio: 0,
-    totalMarkets: 0,
-    activeMarkets: 0,
-    markets: [],
-    isLoading: true,
-    error: null,
+  const [stats, setStats] = useState<UserStats>(() => {
+    // Try to load from local storage initially for instant display
+    if (typeof window !== 'undefined' && userAddress) {
+      try {
+        const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}${userAddress.toLowerCase()}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          // Convert stringified BigInts back to BigInt
+          return {
+            ...parsed,
+            totalInvested: BigInt(parsed.totalInvested),
+            totalEarned: BigInt(parsed.totalEarned),
+            totalRefunded: BigInt(parsed.totalRefunded),
+            pnl: BigInt(parsed.pnl),
+            markets: parsed.markets.map((m: any) => ({
+              ...m,
+              invested: BigInt(m.invested),
+              earned: m.earned !== null ? BigInt(m.earned) : null,
+              refunded: m.refunded !== null ? BigInt(m.refunded) : null,
+            })),
+            isLoading: true, // Still loading in background
+          };
+        }
+      } catch (e) {
+        console.warn('Failed to parse cached stats', e);
+      }
+    }
+    
+    return {
+      totalInvested: BigInt(0),
+      totalEarned: BigInt(0),
+      totalRefunded: BigInt(0),
+      pnl: BigInt(0),
+      wins: 0,
+      losses: 0,
+      winRatio: 0,
+      totalMarkets: 0,
+      activeMarkets: 0,
+      markets: [],
+      isLoading: true,
+      error: null,
+    };
   });
 
   const fetchingRef = useRef(false); // Prevent concurrent fetches
@@ -245,8 +277,27 @@ export function useUserStats(userAddress: string | undefined) {
         error: null,
       };
 
-      // Cache the results
+      // Cache the results in memory
       statsCache.set(userAddress, { stats: finalStats, timestamp: Date.now() });
+      
+      // Cache the results in local storage for persistence (handle BigInt serialization)
+      if (typeof window !== 'undefined') {
+        const serializable = {
+          ...finalStats,
+          totalInvested: totalInvested.toString(),
+          totalEarned: totalEarned.toString(),
+          totalRefunded: totalRefunded.toString(),
+          pnl: pnl.toString(),
+          markets: markets.map(m => ({
+            ...m,
+            invested: m.invested.toString(),
+            earned: m.earned?.toString() || null,
+            refunded: m.refunded?.toString() || null,
+          }))
+        };
+        localStorage.setItem(`${STORAGE_KEY_PREFIX}${userAddress.toLowerCase()}`, JSON.stringify(serializable));
+      }
+
       setStats(finalStats);
     } catch (error) {
       console.error('Error fetching user stats:', error);
