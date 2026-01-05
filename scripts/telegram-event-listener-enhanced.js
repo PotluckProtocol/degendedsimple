@@ -172,11 +172,23 @@ async function queryGeminiResolution(question) {
     const payload = JSON.stringify({
       contents: [{
         role: "user",
-        parts: [{
-          text: `You are a prediction market resolver. Based on real-world data, answer the following question with a clear YES or NO. Also provide a confidence score (0-100) and a brief reasoning.
-          
-          Question: ${question}`
-        }]
+      parts: [{
+        text: `You are a professional prediction market resolver. Your goal is to provide an objective YES or NO answer based on real-world data.
+
+        MARKET QUESTION: ${question}
+
+        STRICT RULES:
+        1. If the question involves a CRYPTO PRICE, you MUST search for the price at the EXACT timestamp mentioned. 
+        2. Use reliable sources like Binance, CoinGecko, TradingView, or CoinMarketCap.
+        3. If the price was $94,000.01 and the target was $94,000, the answer is YES.
+        4. Provide the EXACT price you found in your reasoning.
+        5. If the event has not happened yet or data is unavailable, return INCONCLUSIVE.
+
+        RESPONSE FORMAT:
+        - Suggestion: [YES/NO/INCONCLUSIVE]
+        - Outcome: [1 for YES, 2 for NO, 0 for INCONCLUSIVE]
+        - Reasoning: [Brief explanation with the data points you found]`
+      }]
       }],
       tools: [{ google_search: {} }]
     });
