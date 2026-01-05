@@ -6,10 +6,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ethers } from 'ethers';
 import {
-  querySharesPurchasedEvents,
-  queryWinningsClaimedEvents,
-  queryRefundClaimedEvents,
+  queryUserAuditEvents,
 } from '@/lib/alchemy-client';
+// Forced refresh for build sync
 import { contract } from '@/constants/contract';
 import { readContract } from 'thirdweb';
 
