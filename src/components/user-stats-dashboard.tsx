@@ -28,6 +28,14 @@ export function UserStatsDashboard() {
     refetch
   } = useUserStats(account?.address);
 
+  // Auto-retry once if there's an error and we haven't retried yet
+  useEffect(() => {
+    if (error && refetch) {
+      const timer = setTimeout(() => refetch(), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, refetch]);
+
   if (!account) {
     return (
       <Card>

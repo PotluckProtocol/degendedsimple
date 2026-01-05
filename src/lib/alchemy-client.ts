@@ -70,7 +70,7 @@ async function queryEventsInChunks(
     // we can use much larger chunks. Most providers allow 100k+ block ranges 
     // for specific filters.
     const isSpecificFilter = filter.topics && filter.topics.length > 1 && filter.topics[1] !== null;
-    let chunkSize = isSpecificFilter ? 500000 : 50000; 
+    let chunkSize = isSpecificFilter ? 1000000 : 100000; 
     
     const allLogs: ethers.providers.Log[] = [];
     let from = startBlock;
@@ -88,22 +88,17 @@ async function queryEventsInChunks(
         allLogs.push(...chunkLogs);
         from = to + 1;
         
-        // Small delay to avoid rate limiting
-        if (from <= currentBlock) {
-          await new Promise(resolve => setTimeout(resolve, 20));
-        }
+        // No delay needed for large chunks unless rate limited
       } catch (chunkError: any) {
-        // If block range is too large or too many results, decrease chunk size and retry
+        // If block range is too large, decrease chunk size and retry
         const isRangeError = chunkError.message?.toLowerCase().includes('block range') ||
                              chunkError.message?.toLowerCase().includes('too many results') ||
                              chunkError.body?.toLowerCase().includes('block range');
         
-        if (isRangeError && chunkSize > 1000) {
-          chunkSize = Math.floor(chunkSize / 2);
-          // Don't increment 'from', just retry with smaller chunk
+        if (isRangeError && chunkSize > 5000) {
+          chunkSize = Math.floor(chunkSize / 5);
           continue;
         } else {
-          // Non-range error, log and skip this chunk to avoid infinite loop
           console.warn(`⚠️ Error querying blocks ${from}-${to}:`, chunkError.message?.substring(0, 100));
           from = to + 1;
         }
