@@ -5,6 +5,7 @@
 
 'use client';
 
+import { useEffect } from 'react';
 import { useActiveAccount } from 'thirdweb/react';
 import { useUserStats } from '@/hooks/use-user-stats';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
