@@ -95,7 +95,7 @@ export function UserStatsDashboard() {
           Track your performance across all prediction markets
         </CardDescription>
         <CardContent>
-          {isLoading ? (
+          {isLoading && totalMarkets === 0 ? (
             <div className="space-y-4 py-4">
               <div className="h-20 bg-muted animate-pulse rounded-lg" />
               <div className="grid grid-cols-2 gap-4">
@@ -105,6 +105,12 @@ export function UserStatsDashboard() {
             </div>
           ) : (
             <div className="space-y-6">
+              {isLoading && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  Updating history...
+                </div>
+              )}
               {/* PNL Overview */}
               <div className="flex items-center justify-between p-4 rounded-lg border-2 bg-gradient-to-r from-background to-muted/20">
                 <div>

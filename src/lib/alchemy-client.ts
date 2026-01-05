@@ -53,24 +53,25 @@ async function getCachedBlockNumber(provider: ethers.providers.JsonRpcProvider):
  * 
  * OPTIMIZATION: Try larger chunks first, fallback to smaller if needed
  */
+/**
+ * Query events with optimized chunking and timeout protection
+ */
 async function queryEventsInChunks(
   provider: ethers.providers.JsonRpcProvider,
   filter: ethers.EventFilter,
-  startFromDeployment: boolean = true // Query from contract deployment block
+  startFromDeployment: boolean = true
 ): Promise<ethers.providers.Log[]> {
+  const TIMEOUT = 15000; // 15 second timeout per request
+
   try {
     const currentBlock = await getCachedBlockNumber(provider);
-    
-    // Start from contract deployment block
     const startBlock = startFromDeployment && CONTRACT_DEPLOYMENT_BLOCK 
       ? CONTRACT_DEPLOYMENT_BLOCK
-      : Math.max(0, currentBlock - 200000); // Fallback: last 200k blocks
+      : Math.max(0, currentBlock - 200000);
     
-    // OPTIMIZATION: For specific filters (like user address in topics), 
-    // we can use much larger chunks. Most providers allow 100k+ block ranges 
-    // for specific filters.
+    // Even more aggressive chunking for user-specific filters
     const isSpecificFilter = filter.topics && filter.topics.length > 1 && filter.topics[1] !== null;
-    let chunkSize = isSpecificFilter ? 1000000 : 100000; 
+    let chunkSize = isSpecificFilter ? 2000000 : 200000; 
     
     const allLogs: ethers.providers.Log[] = [];
     let from = startBlock;
@@ -79,27 +80,33 @@ async function queryEventsInChunks(
       const to = Math.min(from + chunkSize - 1, currentBlock);
       
       try {
-        const chunkLogs = await provider.getLogs({
+        // Add a race to implement a timeout
+        const logPromise = provider.getLogs({
           ...filter,
           fromBlock: from,
           toBlock: to,
         });
+
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timed out')), TIMEOUT)
+        );
+
+        const chunkLogs = await Promise.race([logPromise, timeoutPromise]) as ethers.providers.Log[];
         
         allLogs.push(...chunkLogs);
         from = to + 1;
-        
-        // No delay needed for large chunks unless rate limited
       } catch (chunkError: any) {
-        // If block range is too large, decrease chunk size and retry
-        const isRangeError = chunkError.message?.toLowerCase().includes('block range') ||
-                             chunkError.message?.toLowerCase().includes('too many results') ||
-                             chunkError.body?.toLowerCase().includes('block range');
+        const errorMsg = chunkError.message?.toLowerCase() || "";
+        const isRangeError = errorMsg.includes('block range') || 
+                             errorMsg.includes('too many results') ||
+                             errorMsg.includes('limit exceeded') ||
+                             errorMsg.includes('timed out');
         
-        if (isRangeError && chunkSize > 5000) {
-          chunkSize = Math.floor(chunkSize / 5);
+        if (isRangeError && chunkSize > 10000) {
+          chunkSize = Math.floor(chunkSize / 4);
           continue;
         } else {
-          console.warn(`⚠️ Error querying blocks ${from}-${to}:`, chunkError.message?.substring(0, 100));
+          console.warn(`⚠️ Skipping chunk ${from}-${to} due to error:`, errorMsg.substring(0, 50));
           from = to + 1;
         }
       }
@@ -107,8 +114,8 @@ async function queryEventsInChunks(
     
     return allLogs;
   } catch (error) {
-    console.error('Error querying events:', error);
-    throw error;
+    console.error('Critical error in queryEventsInChunks:', error);
+    return []; // Return empty instead of hanging
   }
 }
 

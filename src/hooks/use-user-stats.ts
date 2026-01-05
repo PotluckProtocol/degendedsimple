@@ -124,84 +124,141 @@ export function useUserStats(userAddress: string | undefined) {
       fetchingRef.current = true;
       setStats((prev) => ({ ...prev, isLoading: true, error: null }));
 
+      // 1. Get total market count
+      const marketCountBigInt = await readContract({
+        contract,
+        method: "function marketCount() view returns (uint256)",
+        params: []
+      });
+      const count = Number(marketCountBigInt);
+
+      // 2. Parallel check balances for all markets (very fast for small counts)
+      // This identifies exactly which markets the user is in without scanning logs
+      const balanceChecks = await Promise.all(
+        Array.from({ length: count }, (_, i) => 
+          readContract({
+            contract,
+            method: "function getSharesBalance(uint256 _marketId, address _user) view returns (uint256 optionAShares, uint256 optionBShares)",
+            params: [BigInt(i), userAddress]
+          }).then(res => ({ marketId: i, sharesA: res[0], sharesB: res[1] }))
+        )
+      );
+
+      // Filter to only markets where user has or had shares
+      const activeParticipationIds = balanceChecks
+        .filter(b => b.sharesA > BigInt(0) || b.sharesB > BigInt(0))
+        .map(b => b.marketId);
+
+      // PRELIMINARY STATS: Show current balances immediately while history loads
+      if (activeParticipationIds.length > 0) {
+        setStats(prev => ({
+          ...prev,
+          totalInvested: balanceChecks.reduce((sum, b) => sum + b.sharesA + b.sharesB, BigInt(0)),
+          totalMarkets: activeParticipationIds.length,
+          activeMarkets: activeParticipationIds.length,
+          isLoading: true, // Still true because history is coming
+        }));
+      }
+
+      // 3. Parallel fetch historical events (Winnings/Refunds/Purchases)
+      // We use these to capture markets the user ALREADY claimed
+      // Now wrapped in try/catch to ensure one failure doesn't block everything
+      let purchaseLogs: any[] = [];
+      let winningsLogs: any[] = [];
+      let refundLogs: any[] = [];
+
+      try {
+        const results = await Promise.allSettled([
+          querySharesPurchasedEvents(userAddress),
+          queryWinningsClaimedEvents(userAddress),
+          queryRefundClaimedEvents(userAddress),
+        ]);
+
+        if (results[0].status === 'fulfilled') purchaseLogs = results[0].value;
+        if (results[1].status === 'fulfilled') winningsLogs = results[1].value;
+        if (results[2].status === 'fulfilled') refundLogs = results[2].value;
+      } catch (e) {
+        console.warn('Historical log scan failed, using direct balances only');
+      }
+
       const iface = new ethers.utils.Interface(CONTRACT_ABI);
-      const purchaseLogs = await querySharesPurchasedEvents(userAddress);
       
-      const purchases = purchaseLogs.map((log) => {
+      // Decode all logs to find ALL market IDs user ever touched
+      const historicalMarketIds = new Set<number>();
+      
+      const purchases = purchaseLogs.map(log => {
         const decoded = iface.decodeEventLog('SharesPurchased', log.data, log.topics);
-        return {
-          marketId: decoded.marketId.toNumber(),
-          amount: BigInt(decoded.amount.toString()),
-          isOptionA: decoded.isOptionA,
-        };
+        const mId = decoded.marketId.toNumber();
+        historicalMarketIds.add(mId);
+        return { marketId: mId, amount: BigInt(decoded.amount.toString()) };
       });
 
-      const userMarketIds = Array.from(new Set(purchases.map(p => p.marketId)));
+      winningsLogs.forEach(log => historicalMarketIds.add(iface.decodeEventLog('WinningsClaimed', log.data, log.topics).marketId.toNumber()));
+      refundLogs.forEach(log => historicalMarketIds.add(iface.decodeEventLog('RefundClaimed', log.data, log.topics).marketId.toNumber()));
+      activeParticipationIds.forEach(id => historicalMarketIds.add(id));
 
-      // OPTIMIZATION: Instead of scanning the whole chain for MarketResolved events,
-      // we just read the market info directly for the specific IDs the user is in.
-      const [winningsLogs, refundLogs, marketStates] = await Promise.all([
-        queryWinningsClaimedEvents(userAddress),
-        queryRefundClaimedEvents(userAddress),
-        userMarketIds.length > 0 
-          ? Promise.all(userMarketIds.map(async (id) => {
-              try {
-                const data = await readContract({
-                  contract,
-                  method: "function getMarketInfo(uint256 _marketId) view returns (string question, string optionA, string optionB, uint256 endTime, uint8 outcome, uint256 totalOptionAShares, uint256 totalOptionBShares, bool resolved)",
-                  params: [BigInt(id)]
-                });
-                return { marketId: id, outcome: data[4], resolved: data[7] };
-              } catch (e) {
-                return { marketId: id, outcome: 0, resolved: false };
-              }
-            }))
-          : Promise.resolve([]),
-      ]);
+      const allUserMarketIds = Array.from(historicalMarketIds);
+
+      // 4. Fetch state only for markets the user is actually in
+      const marketStates = await Promise.all(
+        allUserMarketIds.map(async (id) => {
+          try {
+            const data = await readContract({
+              contract,
+              method: "function getMarketInfo(uint256 _marketId) view returns (string question, string optionA, string optionB, uint256 endTime, uint8 outcome, uint256 totalOptionAShares, uint256 totalOptionBShares, bool resolved)",
+              params: [BigInt(id)]
+            });
+            return { marketId: id, outcome: data[4], resolved: data[7] };
+          } catch (e) {
+            return { marketId: id, outcome: 0, resolved: false };
+          }
+        })
+      );
 
       const marketMap = new Map<number, MarketParticipation>();
 
-      purchases.forEach((p) => {
-        const existing = marketMap.get(p.marketId) || {
-          marketId: p.marketId,
+      // Initialize all user markets
+      allUserMarketIds.forEach(id => {
+        marketMap.set(id, {
+          marketId: id,
           invested: BigInt(0),
           earned: null,
           refunded: null,
-          outcome: 'pending' as const,
-          isResolved: false,
-        };
-        existing.invested += p.amount;
-        marketMap.set(p.marketId, existing);
+          outcome: 'pending',
+          isResolved: false
+        });
       });
 
-      winningsLogs.forEach((log) => {
+      // Populate data
+      purchases.forEach(p => {
+        const entry = marketMap.get(p.marketId);
+        if (entry) entry.invested += p.amount;
+      });
+
+      winningsLogs.forEach(log => {
         const decoded = iface.decodeEventLog('WinningsClaimed', log.data, log.topics);
-        const mId = decoded.marketId.toNumber();
-        const existing = marketMap.get(mId);
-        if (existing) {
-          existing.earned = BigInt(decoded.amount.toString());
-          existing.outcome = 'win';
+        const entry = marketMap.get(decoded.marketId.toNumber());
+        if (entry) {
+          entry.earned = BigInt(decoded.amount.toString());
+          entry.outcome = 'win';
         }
       });
 
-      refundLogs.forEach((log) => {
+      refundLogs.forEach(log => {
         const decoded = iface.decodeEventLog('RefundClaimed', log.data, log.topics);
-        const mId = decoded.marketId.toNumber();
-        const existing = marketMap.get(mId);
-        if (existing) {
-          existing.refunded = BigInt(decoded.amount.toString());
-          existing.outcome = 'refund';
+        const entry = marketMap.get(decoded.marketId.toNumber());
+        if (entry) {
+          entry.refunded = BigInt(decoded.amount.toString());
+          entry.outcome = 'refund';
         }
       });
 
-      marketStates.forEach((state) => {
-        const existing = marketMap.get(state.marketId);
-        if (existing) {
-          existing.isResolved = state.resolved;
-          if (existing.isResolved && existing.outcome === 'pending') {
-            if (existing.earned === null && existing.refunded === null) {
-              existing.outcome = 'loss';
-            }
+      marketStates.forEach(state => {
+        const entry = marketMap.get(state.marketId);
+        if (entry) {
+          entry.isResolved = state.resolved;
+          if (entry.isResolved && entry.outcome === 'pending') {
+            if (entry.earned === null && entry.refunded === null) entry.outcome = 'loss';
           }
         }
       });
