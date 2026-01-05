@@ -8,14 +8,16 @@ import { ethers } from 'ethers';
 import { contractAddress } from '@/constants/contract';
 import { CONTRACT_DEPLOYMENT_BLOCK } from '@/constants/contract-deployment';
 
-// Get RPC URL - prefer Alchemy, fallback to default Sonic RPC
+// Get RPC URL - prefer BlockPi/Custom, fallback to default Sonic RPC
 export function getRpcUrl(): string {
   const rpcUrl = 
+    process.env.NEXT_PUBLIC_BLOCKPI_RPC_URL ||
+    process.env.BLOCKPI_RPC_URL ||
     process.env.NEXT_PUBLIC_ALCHEMY_RPC_URL || 
     process.env.ALCHEMY_RPC_URL ||
-    'https://sonic-mainnet.g.alchemy.com/v2/4l0fKzPwYbzWSqdDmxuSv';
+    'https://sonic.blockpi.network/v1/rpc/070d62c6398f583e677454b90200ace51846fe4d';
   
-  return rpcUrl || 'https://rpc.soniclabs.com';
+  return rpcUrl;
 }
 
 // Create ethers provider with Alchemy RPC
@@ -92,8 +94,10 @@ async function queryEventsInChunks(
       ? CONTRACT_DEPLOYMENT_BLOCK
       : Math.max(0, currentBlock - 2000000);
     
-    // Chunk size: 1 million blocks is safe for filtered queries on most RPCs
-    const chunkSize = 1000000; 
+    // Chunk size: BlockPi supports much larger ranges.
+    // 10 million blocks for specific filters, 2 million for general.
+    const isSpecificFilter = filter.topics && filter.topics.length > 1 && filter.topics[filter.topics.length - 1] !== null;
+    const chunkSize = isSpecificFilter ? 10000000 : 2000000; 
     
     const chunks: { from: number; to: number }[] = [];
     for (let from = startBlock; from <= currentBlock; from += chunkSize) {

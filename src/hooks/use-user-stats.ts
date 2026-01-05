@@ -123,6 +123,44 @@ export function useUserStats(userAddress: string | undefined) {
       fetchingRef.current = true;
       setStats((prev) => ({ ...prev, isLoading: true, error: null }));
 
+      // --- DB OPTIMIZATION START ---
+      // Try to fetch from our database API first
+      let auditLogs: any[] = [];
+      let dbSuccess = false;
+
+      try {
+        const apiResponse = await fetch(`/api/user-stats?address=${userAddress}`);
+        if (apiResponse.ok) {
+          const apiData = await apiResponse.json();
+          if (apiData.success) {
+            // Reconstruct logs format from DB data
+            const dbEventsByMarket = apiData.data;
+            const marketIds = Object.keys(dbEventsByMarket).map(Number);
+            
+            // Convert DB rows back into "logs" for the existing calculation logic
+            // This keeps the complex calculation logic intact while swapping the source
+            auditLogs = [];
+            marketIds.forEach(mId => {
+              const events = dbEventsByMarket[mId];
+              events.forEach((ev: any) => {
+                auditLogs.push({
+                  name: ev.type === 'purchase' ? 'SharesPurchased' : (ev.type === 'win' ? 'WinningsClaimed' : 'RefundClaimed'),
+                  args: {
+                    marketId: { toNumber: () => mId },
+                    amount: { toString: () => ev.amount },
+                    isOptionA: ev.isOptionA
+                  }
+                });
+              });
+            });
+            dbSuccess = true;
+            console.log(`✅ Stats loaded from DB (${auditLogs.length} events)`);
+          }
+        }
+      } catch (dbError) {
+        console.warn('DB Stats fetch failed, falling back to on-chain scan:', dbError);
+      }
+
       // 1. Get total market count
       const marketCountBigInt = await readContract({
         contract,
@@ -131,9 +169,8 @@ export function useUserStats(userAddress: string | undefined) {
       });
       const count = Number(marketCountBigInt);
 
-      // 2. Parallel Fast-Track: Check balances and Combined Audit Scan
-      // We do the audit scan and balance checks in parallel for maximum speed
-      const [balanceChecks, auditLogs] = await Promise.all([
+      // 2. Parallel Fast-Track: Check balances and (if needed) On-Chain Audit Scan
+      const [balanceChecks, chainLogs] = await Promise.all([
         Promise.all(
           Array.from({ length: count }, (_, i) => 
             readContract({
@@ -143,38 +180,47 @@ export function useUserStats(userAddress: string | undefined) {
             }).then(res => ({ marketId: i, sharesA: res[0], sharesB: res[1] }))
           )
         ),
-        queryUserAuditEvents(userAddress)
+        !dbSuccess ? queryUserAuditEvents(userAddress) : Promise.resolve([])
       ]);
 
       const iface = new ethers.utils.Interface(CONTRACT_ABI);
       const userMarketIds = new Set<number>();
       
-      // Sort the single audit log stream into its components using robust parsing
       const purchases: {marketId: number, amount: bigint}[] = [];
       const decodedWinnings: any[] = [];
       const decodedRefunds: any[] = [];
 
-      auditLogs.forEach(log => {
-        try {
-          const parsedLog = iface.parseLog(log);
-          const logName = parsedLog.name;
-          const decoded = parsedLog.args;
-          const mId = decoded.marketId.toNumber();
-          
+      // Process logs (either from DB or On-Chain)
+      if (dbSuccess) {
+        // DB logs are already parsed/decoded in our API adapter above
+        auditLogs.forEach(log => {
+          const mId = log.args.marketId.toNumber();
           userMarketIds.add(mId);
-
-          if (logName === 'SharesPurchased') {
-            purchases.push({ marketId: mId, amount: BigInt(decoded.amount.toString()) });
-          } else if (logName === 'WinningsClaimed') {
-            decodedWinnings.push(decoded);
-          } else if (logName === 'RefundClaimed') {
-            decodedRefunds.push(decoded);
+          if (log.name === 'SharesPurchased') {
+            purchases.push({ marketId: mId, amount: BigInt(log.args.amount.toString()) });
+          } else if (log.name === 'WinningsClaimed') {
+            decodedWinnings.push(log.args);
+          } else if (log.name === 'RefundClaimed') {
+            decodedRefunds.push(log.args);
           }
-        } catch (e) {
-          // Log not from our ABI or failed to decode
-          console.warn('Failed to parse log during audit', e);
-        }
-      });
+        });
+      } else {
+        // Process raw logs from chain
+        chainLogs.forEach(log => {
+          try {
+            const parsedLog = iface.parseLog(log);
+            const mId = parsedLog.args.marketId.toNumber();
+            userMarketIds.add(mId);
+            if (parsedLog.name === 'SharesPurchased') {
+              purchases.push({ marketId: mId, amount: BigInt(parsedLog.args.amount.toString()) });
+            } else if (parsedLog.name === 'WinningsClaimed') {
+              decodedWinnings.push(parsedLog.args);
+            } else if (parsedLog.name === 'RefundClaimed') {
+              decodedRefunds.push(parsedLog.args);
+            }
+          } catch (e) {}
+        });
+      }
 
       // Filter to only markets where user has active shares
       balanceChecks

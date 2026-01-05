@@ -14,6 +14,8 @@ const { createThirdwebClient, getContract, readContract, prepareContractCall, se
 const { privateKeyToAccount } = require('thirdweb/wallets');
 const https = require('https');
 const { defineChain } = require('thirdweb/chains');
+const { Pool } = require('pg');
+const { ethers } = require('ethers');
 const { 
   sendTelegramMessage, 
   formatMarketCreatedMessage, 
@@ -27,10 +29,135 @@ const {
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0xC04c1DE26F5b01151eC72183b5615635E609cC81';
 const POLL_INTERVAL = 60000; // Poll every 60 seconds
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://degended.bet';
-const ALCHEMY_RPC_URL = process.env.ALCHEMY_RPC_URL;
+const RPC_URL = 
+  process.env.BLOCKPI_RPC_URL || 
+  process.env.NEXT_PUBLIC_BLOCKPI_RPC_URL || 
+  process.env.ALCHEMY_RPC_URL || 
+  process.env.NEXT_PUBLIC_ALCHEMY_RPC_URL || 
+  'https://sonic.blockpi.network/v1/rpc/070d62c6398f583e677454b90200ace51846fe4d';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const DATABASE_URL = process.env.DATABASE_URL;
 
+// Database connection
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+const EVENT_SIGNATURES = {
+  SharesPurchased: '0x15239e9301980894514a66e74f1771120464f1d0728c40b8a6a6a575a6c11394', // SharesPurchased(uint256,address,bool,uint256)
+  WinningsClaimed: '0x994a3e8023e449265f2425576a8d6268846d0426f0477218a1a9e9a4f9104f2f', // WinningsClaimed(uint256,address,uint256)
+  RefundClaimed: '0x8b53e7f6e80b2f4f8101a91e56317b9b1e7c5b967204f2275b2933b9347d967b'    // RefundClaimed(uint256,address,uint256)
+};
+
+async function initDb() {
+  if (!DATABASE_URL) {
+    console.warn('⚠️ DATABASE_URL not set, skipping DB initialization');
+    return false;
+  }
+  
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS market_events (
+        id SERIAL PRIMARY KEY,
+        market_id INTEGER NOT NULL,
+        user_address TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        amount NUMERIC NOT NULL,
+        is_option_a BOOLEAN,
+        tx_hash TEXT NOT NULL,
+        block_number INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_user_address ON market_events(user_address);
+      CREATE INDEX IF NOT EXISTS idx_market_id ON market_events(market_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_tx_event ON market_events(tx_hash, event_type, user_address);
+      
+      CREATE TABLE IF NOT EXISTS sync_state (
+        key TEXT PRIMARY KEY,
+        last_block INTEGER NOT NULL
+      );
+    `);
+    console.log('✅ Database tables initialized');
+    return true;
+  } catch (error) {
+    console.error('❌ Database init error:', error);
+    return false;
+  }
+}
+
+async function syncEvents(provider) {
+  if (!DATABASE_URL) return;
+
+  try {
+    const res = await pool.query("SELECT last_block FROM sync_state WHERE key = 'events'");
+    let startBlock = res.rows[0]?.last_block || 3416417; // Default to deployment block
+    const currentBlock = await provider.getBlockNumber();
+    
+    if (startBlock >= currentBlock) return;
+
+    // Sonic limits: 10M block range is safe for specific filters on BlockPi
+    const endBlock = Math.min(startBlock + 10000000, currentBlock);
+    
+    console.log(`🔍 Syncing events from block ${startBlock} to ${endBlock}...`);
+
+    const logs = await provider.getLogs({
+      address: CONTRACT_ADDRESS,
+      fromBlock: startBlock + 1,
+      toBlock: endBlock,
+      topics: [[
+        EVENT_SIGNATURES.SharesPurchased,
+        EVENT_SIGNATURES.WinningsClaimed,
+        EVENT_SIGNATURES.RefundClaimed
+      ]]
+    });
+
+    for (const log of logs) {
+      const topic = log.topics[0];
+      const marketId = parseInt(log.topics[1], 16);
+      const userAddress = '0x' + log.topics[2].slice(26).toLowerCase();
+      
+      let eventType = '';
+      let amount = '0';
+      let isOptionA = null;
+
+      if (topic === EVENT_SIGNATURES.SharesPurchased) {
+        eventType = 'purchase';
+        // Decode data: isOptionA (bool), amount (uint256)
+        const decoded = ethers.utils.defaultAbiCoder.decode(['bool', 'uint256'], log.data);
+        isOptionA = decoded[0];
+        amount = decoded[1].toString();
+      } else if (topic === EVENT_SIGNATURES.WinningsClaimed) {
+        eventType = 'win';
+        const decoded = ethers.utils.defaultAbiCoder.decode(['uint256'], log.data);
+        amount = decoded[0].toString();
+      } else if (topic === EVENT_SIGNATURES.RefundClaimed) {
+        eventType = 'refund';
+        const decoded = ethers.utils.defaultAbiCoder.decode(['uint256'], log.data);
+        amount = decoded[0].toString();
+      }
+
+      await pool.query(`
+        INSERT INTO market_events (market_id, user_address, event_type, amount, is_option_a, tx_hash, block_number)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (tx_hash, event_type, user_address) DO NOTHING
+      `, [marketId, userAddress, eventType, amount, isOptionA, log.transactionHash, log.blockNumber]);
+    }
+
+    await pool.query("INSERT INTO sync_state (key, last_block) VALUES ('events', $1) ON CONFLICT (key) DO UPDATE SET last_block = $1", [endBlock]);
+    console.log(`✅ Synced ${logs.length} events up to block ${endBlock}`);
+    
+    // If we're not at the current block yet, sync again immediately
+    if (endBlock < currentBlock) {
+      await syncEvents(provider);
+    }
+  } catch (error) {
+    console.error('❌ Event sync error:', error);
+  }
+}
+
+// ... rest of the file ...
 // Track suggested resolutions to avoid spamming
 const suggestedResolutions = new Set(); // Set of marketIds
 
@@ -88,11 +215,11 @@ async function queryGeminiResolution(question) {
   });
 }
 
-// Define Sonic chain with Alchemy RPC
+// Define Sonic chain with RPC
 const sonic = defineChain({
   id: 146,
   name: 'Sonic',
-  rpc: ALCHEMY_RPC_URL || 'https://rpc.soniclabs.com',
+  rpc: RPC_URL,
 });
 
 // Track processed markets
@@ -104,6 +231,9 @@ const subscribedChats = new Set(); // Set of chat IDs (strings)
 async function main() {
   console.log('🤖 Starting Telegram Event Listener (Enhanced)...');
   console.log('🔧 Using Alchemy RPC for better performance\n');
+  
+  // Initialize Database
+  const dbReady = await initDb();
   
   const bot = initTelegramBot(null, true); // Enable polling for commands (chatId not needed for polling)
   console.log('✅ Telegram bot initialized with command support');
@@ -125,6 +255,14 @@ async function main() {
     chain: sonic,
     address: CONTRACT_ADDRESS,
   });
+
+  // Ether.js provider for raw log scanning
+  const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+
+  // Initial Sync
+  if (dbReady) {
+    await syncEvents(provider);
+  }
 
   // Set up command handlers
   bot.onText(/\/markets|\/open|\/active/i, async (msg) => {
@@ -300,7 +438,7 @@ async function main() {
 
   console.log(`📡 Listening to contract: ${CONTRACT_ADDRESS}`);
   console.log(`🔄 Polling interval: ${POLL_INTERVAL / 1000} seconds`);
-  console.log(`🌐 RPC: ${ALCHEMY_RPC_URL ? 'Alchemy' : 'Default'}\n`);
+  console.log(`🌐 RPC: ${RPC_URL}\n`);
 
   // Get initial market count and mark resolved markets
   try {
@@ -338,6 +476,7 @@ async function main() {
   // Start polling
   setInterval(async () => {
     try {
+      if (dbReady) await syncEvents(provider);
       await checkForNewMarkets(contract, bot);
     } catch (error) {
       console.error('Error checking markets:', error);
