@@ -92,7 +92,7 @@ async function syncEvents(provider) {
 
   try {
     const res = await pool.query("SELECT last_block FROM sync_state WHERE key = 'events'");
-    let startBlock = res.rows[0]?.last_block || 3416417; // Default to deployment block
+    let startBlock = res.rows[0]?.last_block || 56668150; // Default to deployment block (Sonic Mainnet)
     const currentBlock = await provider.getBlockNumber();
     
     if (startBlock >= currentBlock) return;
