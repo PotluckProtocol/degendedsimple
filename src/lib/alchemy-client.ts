@@ -54,69 +54,79 @@ async function getCachedBlockNumber(provider: ethers.providers.JsonRpcProvider):
  * OPTIMIZATION: Try larger chunks first, fallback to smaller if needed
  */
 /**
- * Query events with optimized chunking and timeout protection
+ * Query events with optimized parallel chunking
  */
 async function queryEventsInChunks(
   provider: ethers.providers.JsonRpcProvider,
   filter: ethers.EventFilter,
   startFromDeployment: boolean = true
 ): Promise<ethers.providers.Log[]> {
-  const TIMEOUT = 15000; // 15 second timeout per request
-
   try {
     const currentBlock = await getCachedBlockNumber(provider);
     const startBlock = startFromDeployment && CONTRACT_DEPLOYMENT_BLOCK 
       ? CONTRACT_DEPLOYMENT_BLOCK
-      : Math.max(0, currentBlock - 200000);
+      : Math.max(0, currentBlock - 5000000);
     
-    // Even more aggressive chunking for user-specific filters
-    const isSpecificFilter = filter.topics && filter.topics.length > 1 && filter.topics[1] !== null;
-    let chunkSize = isSpecificFilter ? 2000000 : 200000; 
+    // For filtered queries (by user address), we can use massive chunks safely
+    const isSpecificFilter = filter.topics && filter.topics.length > 1 && filter.topics[filter.topics.length - 1] !== null;
+    const chunkSize = isSpecificFilter ? 5000000 : 500000; 
     
-    const allLogs: ethers.providers.Log[] = [];
-    let from = startBlock;
-    
-    while (from <= currentBlock) {
-      const to = Math.min(from + chunkSize - 1, currentBlock);
-      
-      try {
-        // Add a race to implement a timeout
-        const logPromise = provider.getLogs({
-          ...filter,
-          fromBlock: from,
-          toBlock: to,
-        });
-
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Request timed out')), TIMEOUT)
-        );
-
-        const chunkLogs = await Promise.race([logPromise, timeoutPromise]) as ethers.providers.Log[];
-        
-        allLogs.push(...chunkLogs);
-        from = to + 1;
-      } catch (chunkError: any) {
-        const errorMsg = chunkError.message?.toLowerCase() || "";
-        const isRangeError = errorMsg.includes('block range') || 
-                             errorMsg.includes('too many results') ||
-                             errorMsg.includes('limit exceeded') ||
-                             errorMsg.includes('timed out');
-        
-        if (isRangeError && chunkSize > 10000) {
-          chunkSize = Math.floor(chunkSize / 4);
-          continue;
-        } else {
-          console.warn(`⚠️ Skipping chunk ${from}-${to} due to error:`, errorMsg.substring(0, 50));
-          from = to + 1;
-        }
-      }
+    const chunks: { from: number; to: number }[] = [];
+    for (let from = startBlock; from <= currentBlock; from += chunkSize) {
+      chunks.push({ from, to: Math.min(from + chunkSize - 1, currentBlock) });
     }
+
+    // Fetch all chunks in parallel
+    const allLogs = await Promise.all(
+      chunks.map(async (chunk) => {
+        try {
+          return await provider.getLogs({
+            ...filter,
+            fromBlock: chunk.from,
+            toBlock: chunk.to,
+          });
+        } catch (e: any) {
+          console.warn(`Retry needed for chunk ${chunk.from}-${chunk.to}`);
+          // If a massive chunk fails, try splitting it once
+          const mid = Math.floor((chunk.from + chunk.to) / 2);
+          const [p1, p2] = await Promise.all([
+            provider.getLogs({ ...filter, fromBlock: chunk.from, toBlock: mid }),
+            provider.getLogs({ ...filter, fromBlock: mid + 1, toBlock: chunk.to })
+          ]);
+          return [...p1, ...p2];
+        }
+      })
+    );
     
-    return allLogs;
+    return allLogs.flat();
   } catch (error) {
-    console.error('Critical error in queryEventsInChunks:', error);
-    return []; // Return empty instead of hanging
+    console.error('Audit scan error:', error);
+    return [];
   }
+}
+
+/**
+ * NEW: Combined User Audit Query
+ * Scans for Purchases, Winnings, and Refunds in a single pass
+ */
+export async function queryUserAuditEvents(userAddress: string) {
+  const provider = getProvider();
+  const userTopic = ethers.utils.hexZeroPad(userAddress, 32);
+  
+  const filter = {
+    address: contractAddress,
+    topics: [
+      [
+        EVENT_SIGNATURES.SharesPurchased,
+        EVENT_SIGNATURES.WinningsClaimed,
+        EVENT_SIGNATURES.RefundClaimed
+      ],
+      null, // any marketId
+      userTopic, // user is always the 3rd topic in these events
+    ],
+  } as ethers.EventFilter;
+  
+  return queryEventsInChunks(provider, filter);
 }
 
 /**

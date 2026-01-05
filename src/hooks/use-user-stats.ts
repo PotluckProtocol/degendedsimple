@@ -132,74 +132,68 @@ export function useUserStats(userAddress: string | undefined) {
       });
       const count = Number(marketCountBigInt);
 
-      // 2. Parallel check balances for all markets (very fast for small counts)
-      // This identifies exactly which markets the user is in without scanning logs
-      const balanceChecks = await Promise.all(
-        Array.from({ length: count }, (_, i) => 
-          readContract({
-            contract,
-            method: "function getSharesBalance(uint256 _marketId, address _user) view returns (uint256 optionAShares, uint256 optionBShares)",
-            params: [BigInt(i), userAddress]
-          }).then(res => ({ marketId: i, sharesA: res[0], sharesB: res[1] }))
-        )
-      );
-
-      // Filter to only markets where user has or had shares
-      const activeParticipationIds = balanceChecks
-        .filter(b => b.sharesA > BigInt(0) || b.sharesB > BigInt(0))
-        .map(b => b.marketId);
-
-      // PRELIMINARY STATS: Show current balances immediately while history loads
-      if (activeParticipationIds.length > 0) {
-        setStats(prev => ({
-          ...prev,
-          totalInvested: balanceChecks.reduce((sum, b) => sum + b.sharesA + b.sharesB, BigInt(0)),
-          totalMarkets: activeParticipationIds.length,
-          activeMarkets: activeParticipationIds.length,
-          isLoading: true, // Still true because history is coming
-        }));
-      }
-
-      // 3. Parallel fetch historical events (Winnings/Refunds/Purchases)
-      // We use these to capture markets the user ALREADY claimed
-      // Now wrapped in try/catch to ensure one failure doesn't block everything
-      let purchaseLogs: any[] = [];
-      let winningsLogs: any[] = [];
-      let refundLogs: any[] = [];
-
-      try {
-        const results = await Promise.allSettled([
-          querySharesPurchasedEvents(userAddress),
-          queryWinningsClaimedEvents(userAddress),
-          queryRefundClaimedEvents(userAddress),
-        ]);
-
-        if (results[0].status === 'fulfilled') purchaseLogs = results[0].value;
-        if (results[1].status === 'fulfilled') winningsLogs = results[1].value;
-        if (results[2].status === 'fulfilled') refundLogs = results[2].value;
-      } catch (e) {
-        console.warn('Historical log scan failed, using direct balances only');
-      }
+      // 2. Parallel Fast-Track: Check balances and Combined Audit Scan
+      // We do the audit scan and balance checks in parallel for maximum speed
+      const [balanceChecks, auditLogs] = await Promise.all([
+        Promise.all(
+          Array.from({ length: count }, (_, i) => 
+            readContract({
+              contract,
+              method: "function getSharesBalance(uint256 _marketId, address _user) view returns (uint256 optionAShares, uint256 optionBShares)",
+              params: [BigInt(i), userAddress]
+            }).then(res => ({ marketId: i, sharesA: res[0], sharesB: res[1] }))
+          )
+        ),
+        queryUserAuditEvents(userAddress)
+      ]);
 
       const iface = new ethers.utils.Interface(CONTRACT_ABI);
+      const userMarketIds = new Set<number>();
       
-      // Decode all logs to find ALL market IDs user ever touched
-      const historicalMarketIds = new Set<number>();
-      
-      const purchases = purchaseLogs.map(log => {
-        const decoded = iface.decodeEventLog('SharesPurchased', log.data, log.topics);
-        const mId = decoded.marketId.toNumber();
-        historicalMarketIds.add(mId);
-        return { marketId: mId, amount: BigInt(decoded.amount.toString()) };
+      // Sort the single audit log stream into its components
+      const purchases: {marketId: number, amount: bigint}[] = [];
+      const decodedWinnings: any[] = [];
+      const decodedRefunds: any[] = [];
+
+      const EVENT_SIGS = {
+        PURCHASE: ethers.utils.id('SharesPurchased(uint256,address,bool,uint256)'),
+        WINNINGS: ethers.utils.id('WinningsClaimed(uint256,address,uint256)'),
+        REFUND: ethers.utils.id('RefundClaimed(uint256,address,uint256)'),
+      };
+
+      auditLogs.forEach(log => {
+        const sig = log.topics[0];
+        try {
+          const logName = sig === EVENT_SIGS.PURCHASE ? 'SharesPurchased' : 
+                          sig === EVENT_SIGS.WINNINGS ? 'WinningsClaimed' : 
+                          sig === EVENT_SIGS.REFUND ? 'RefundClaimed' : null;
+          
+          if (!logName) return;
+
+          const decoded = iface.decodeEventLog(logName, log.data, log.topics);
+          const mId = decoded.marketId.toNumber();
+          userMarketIds.add(mId);
+
+          if (sig === EVENT_SIGS.PURCHASE) {
+            purchases.push({ marketId: mId, amount: BigInt(decoded.amount.toString()) });
+          } else if (sig === EVENT_SIGS.WINNINGS) {
+            decodedWinnings.push(decoded);
+          } else if (sig === EVENT_SIGS.REFUND) {
+            decodedRefunds.push(decoded);
+          }
+        } catch (e) {
+          console.warn('Failed to decode audit log', e);
+        }
       });
 
-      winningsLogs.forEach(log => historicalMarketIds.add(iface.decodeEventLog('WinningsClaimed', log.data, log.topics).marketId.toNumber()));
-      refundLogs.forEach(log => historicalMarketIds.add(iface.decodeEventLog('RefundClaimed', log.data, log.topics).marketId.toNumber()));
-      activeParticipationIds.forEach(id => historicalMarketIds.add(id));
+      // Filter to only markets where user has active shares
+      balanceChecks
+        .filter(b => b.sharesA > BigInt(0) || b.sharesB > BigInt(0))
+        .forEach(b => userMarketIds.add(b.marketId));
 
-      const allUserMarketIds = Array.from(historicalMarketIds);
+      const allUserMarketIds = Array.from(userMarketIds);
 
-      // 4. Fetch state only for markets the user is actually in
+      // 3. Fetch state only for markets the user is actually in
       const marketStates = await Promise.all(
         allUserMarketIds.map(async (id) => {
           try {
@@ -235,8 +229,7 @@ export function useUserStats(userAddress: string | undefined) {
         if (entry) entry.invested += p.amount;
       });
 
-      winningsLogs.forEach(log => {
-        const decoded = iface.decodeEventLog('WinningsClaimed', log.data, log.topics);
+      decodedWinnings.forEach(decoded => {
         const entry = marketMap.get(decoded.marketId.toNumber());
         if (entry) {
           entry.earned = BigInt(decoded.amount.toString());
@@ -244,8 +237,7 @@ export function useUserStats(userAddress: string | undefined) {
         }
       });
 
-      refundLogs.forEach(log => {
-        const decoded = iface.decodeEventLog('RefundClaimed', log.data, log.topics);
+      decodedRefunds.forEach(decoded => {
         const entry = marketMap.get(decoded.marketId.toNumber());
         if (entry) {
           entry.refunded = BigInt(decoded.amount.toString());
