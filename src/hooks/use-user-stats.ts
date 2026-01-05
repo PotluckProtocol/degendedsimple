@@ -149,39 +149,30 @@ export function useUserStats(userAddress: string | undefined) {
       const iface = new ethers.utils.Interface(CONTRACT_ABI);
       const userMarketIds = new Set<number>();
       
-      // Sort the single audit log stream into its components
+      // Sort the single audit log stream into its components using robust parsing
       const purchases: {marketId: number, amount: bigint}[] = [];
       const decodedWinnings: any[] = [];
       const decodedRefunds: any[] = [];
 
-      const EVENT_SIGS = {
-        PURCHASE: ethers.utils.id('SharesPurchased(uint256,address,bool,uint256)'),
-        WINNINGS: ethers.utils.id('WinningsClaimed(uint256,address,uint256)'),
-        REFUND: ethers.utils.id('RefundClaimed(uint256,address,uint256)'),
-      };
-
       auditLogs.forEach(log => {
-        const sig = log.topics[0];
         try {
-          const logName = sig === EVENT_SIGS.PURCHASE ? 'SharesPurchased' : 
-                          sig === EVENT_SIGS.WINNINGS ? 'WinningsClaimed' : 
-                          sig === EVENT_SIGS.REFUND ? 'RefundClaimed' : null;
-          
-          if (!logName) return;
-
-          const decoded = iface.decodeEventLog(logName, log.data, log.topics);
+          const parsedLog = iface.parseLog(log);
+          const logName = parsedLog.name;
+          const decoded = parsedLog.args;
           const mId = decoded.marketId.toNumber();
+          
           userMarketIds.add(mId);
 
-          if (sig === EVENT_SIGS.PURCHASE) {
+          if (logName === 'SharesPurchased') {
             purchases.push({ marketId: mId, amount: BigInt(decoded.amount.toString()) });
-          } else if (sig === EVENT_SIGS.WINNINGS) {
+          } else if (logName === 'WinningsClaimed') {
             decodedWinnings.push(decoded);
-          } else if (sig === EVENT_SIGS.REFUND) {
+          } else if (logName === 'RefundClaimed') {
             decodedRefunds.push(decoded);
           }
         } catch (e) {
-          console.warn('Failed to decode audit log', e);
+          // Log not from our ABI or failed to decode
+          console.warn('Failed to parse log during audit', e);
         }
       });
 

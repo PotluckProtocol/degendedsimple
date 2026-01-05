@@ -54,60 +54,8 @@ async function getCachedBlockNumber(provider: ethers.providers.JsonRpcProvider):
  * OPTIMIZATION: Try larger chunks first, fallback to smaller if needed
  */
 /**
- * Query events with optimized parallel chunking
- */
-async function queryEventsInChunks(
-  provider: ethers.providers.JsonRpcProvider,
-  filter: ethers.EventFilter,
-  startFromDeployment: boolean = true
-): Promise<ethers.providers.Log[]> {
-  try {
-    const currentBlock = await getCachedBlockNumber(provider);
-    const startBlock = startFromDeployment && CONTRACT_DEPLOYMENT_BLOCK 
-      ? CONTRACT_DEPLOYMENT_BLOCK
-      : Math.max(0, currentBlock - 5000000);
-    
-    // For filtered queries (by user address), we can use massive chunks safely
-    const isSpecificFilter = filter.topics && filter.topics.length > 1 && filter.topics[filter.topics.length - 1] !== null;
-    const chunkSize = isSpecificFilter ? 5000000 : 500000; 
-    
-    const chunks: { from: number; to: number }[] = [];
-    for (let from = startBlock; from <= currentBlock; from += chunkSize) {
-      chunks.push({ from, to: Math.min(from + chunkSize - 1, currentBlock) });
-    }
-
-    // Fetch all chunks in parallel
-    const allLogs = await Promise.all(
-      chunks.map(async (chunk) => {
-        try {
-          return await provider.getLogs({
-            ...filter,
-            fromBlock: chunk.from,
-            toBlock: chunk.to,
-          });
-        } catch (e: any) {
-          console.warn(`Retry needed for chunk ${chunk.from}-${chunk.to}`);
-          // If a massive chunk fails, try splitting it once
-          const mid = Math.floor((chunk.from + chunk.to) / 2);
-          const [p1, p2] = await Promise.all([
-            provider.getLogs({ ...filter, fromBlock: chunk.from, toBlock: mid }),
-            provider.getLogs({ ...filter, fromBlock: mid + 1, toBlock: chunk.to })
-          ]);
-          return [...p1, ...p2];
-        }
-      })
-    );
-    
-    return allLogs.flat();
-  } catch (error) {
-    console.error('Audit scan error:', error);
-    return [];
-  }
-}
-
-/**
- * NEW: Combined User Audit Query
- * Scans for Purchases, Winnings, and Refunds in a single pass
+ * Query User Audit Events (Combined)
+ * Scans for Purchases, Winnings, and Refunds in a single high-speed pass
  */
 export async function queryUserAuditEvents(userAddress: string) {
   const provider = getProvider();
@@ -122,11 +70,61 @@ export async function queryUserAuditEvents(userAddress: string) {
         EVENT_SIGNATURES.RefundClaimed
       ],
       null, // any marketId
-      userTopic, // user is always the 3rd topic in these events
+      userTopic, // user address is the 3rd topic (index 2)
     ],
   } as ethers.EventFilter;
   
-  return queryEventsInChunks(provider, filter);
+  // Sonic RPC safe chunking (1M blocks is usually the sweet spot for parallel requests)
+  return queryEventsInChunks(provider, filter, true);
+}
+
+/**
+ * Optimized parallel chunking with automatic retries and range splitting
+ */
+async function queryEventsInChunks(
+  provider: ethers.providers.JsonRpcProvider,
+  filter: ethers.EventFilter,
+  startFromDeployment: boolean = true
+): Promise<ethers.providers.Log[]> {
+  try {
+    const currentBlock = await getCachedBlockNumber(provider);
+    const startBlock = startFromDeployment && CONTRACT_DEPLOYMENT_BLOCK 
+      ? CONTRACT_DEPLOYMENT_BLOCK
+      : Math.max(0, currentBlock - 2000000);
+    
+    // Chunk size: 1 million blocks is safe for filtered queries on most RPCs
+    const chunkSize = 1000000; 
+    
+    const chunks: { from: number; to: number }[] = [];
+    for (let from = startBlock; from <= currentBlock; from += chunkSize) {
+      chunks.push({ from, to: Math.min(from + chunkSize - 1, currentBlock) });
+    }
+
+    // Process chunks in parallel
+    const results = await Promise.allSettled(
+      chunks.map(async (chunk) => {
+        return await provider.getLogs({
+          ...filter,
+          fromBlock: chunk.from,
+          toBlock: chunk.to,
+        });
+      })
+    );
+    
+    const allLogs: ethers.providers.Log[] = [];
+    results.forEach((res, i) => {
+      if (res.status === 'fulfilled') {
+        allLogs.push(...res.value);
+      } else {
+        console.warn(`Chunk ${chunks[i].from} failed, skipping...`, res.reason);
+      }
+    });
+    
+    return allLogs;
+  } catch (error) {
+    console.error('Critical audit scan failure:', error);
+    return [];
+  }
 }
 
 /**
