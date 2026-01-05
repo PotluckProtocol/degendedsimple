@@ -46,9 +46,9 @@ const pool = new Pool({
 });
 
 const EVENT_SIGNATURES = {
-  SharesPurchased: '0x15239e9301980894514a66e74f1771120464f1d0728c40b8a6a6a575a6c11394', // SharesPurchased(uint256,address,bool,uint256)
-  WinningsClaimed: '0x994a3e8023e449265f2425576a8d6268846d0426f0477218a1a9e9a4f9104f2f', // WinningsClaimed(uint256,address,uint256)
-  RefundClaimed: '0x8b53e7f6e80b2f4f8101a91e56317b9b1e7c5b967204f2275b2933b9347d967b'    // RefundClaimed(uint256,address,uint256)
+  SharesPurchased: '0xb3a1ddef05fa52ff8a462662e00f5fd54a3b35e85417cafcaa671fb30434bd11',
+  WinningsClaimed: '0x5380cf6fe903b40c6d5a9e0dfbca2f3a423f0a21520b4d5947ed5169bdba946d',
+  RefundClaimed: '0xf3f402280ef0a7905e124aa621b65eaeb2725c343e8b36d398ed78c29daf285c'
 };
 
 async function initDb() {

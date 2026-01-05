@@ -27,10 +27,10 @@ export function getProvider(): ethers.providers.JsonRpcProvider {
 
 // Event signatures (keccak256 hash of event signature)
 const EVENT_SIGNATURES = {
-  SharesPurchased: '0x' + ethers.utils.id('SharesPurchased(uint256,address,bool,uint256)').slice(2, 66),
-  WinningsClaimed: '0x' + ethers.utils.id('WinningsClaimed(uint256,address,uint256)').slice(2, 66),
-  RefundClaimed: '0x' + ethers.utils.id('RefundClaimed(uint256,address,uint256)').slice(2, 66),
-  MarketResolved: '0x' + ethers.utils.id('MarketResolved(uint256,uint8)').slice(2, 66),
+  SharesPurchased: '0xb3a1ddef05fa52ff8a462662e00f5fd54a3b35e85417cafcaa671fb30434bd11',
+  WinningsClaimed: '0x5380cf6fe903b40c6d5a9e0dfbca2f3a423f0a21520b4d5947ed5169bdba946d',
+  RefundClaimed: '0xf3f402280ef0a7905e124aa621b65eaeb2725c343e8b36d398ed78c29daf285c',
+  MarketResolved: '0x739f283563fb51ab6b89ee95d937b2e63a6cfcb83c385dbebb629f9d97bd43e69',
 } as const;
 
 // Cache for current block number to avoid repeated calls

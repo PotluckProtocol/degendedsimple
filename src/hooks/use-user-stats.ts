@@ -133,12 +133,10 @@ export function useUserStats(userAddress: string | undefined) {
         if (apiResponse.ok) {
           const apiData = await apiResponse.json();
           if (apiData.success) {
-            // Reconstruct logs format from DB data
+            console.log('DEBUG: DB Stats Response:', apiData);
             const dbEventsByMarket = apiData.data;
             const marketIds = Object.keys(dbEventsByMarket).map(Number);
             
-            // Convert DB rows back into "logs" for the existing calculation logic
-            // This keeps the complex calculation logic intact while swapping the source
             auditLogs = [];
             marketIds.forEach(mId => {
               const events = dbEventsByMarket[mId];
@@ -153,9 +151,13 @@ export function useUserStats(userAddress: string | undefined) {
                 });
               });
             });
-            dbSuccess = true;
+            dbSuccess = auditLogs.length > 0;
             console.log(`✅ Stats loaded from DB (${auditLogs.length} events)`);
+          } else {
+            console.log('DEBUG: DB API returned success: false', apiData);
           }
+        } else {
+          console.log('DEBUG: DB API Response not OK:', apiResponse.status);
         }
       } catch (dbError) {
         console.warn('DB Stats fetch failed, falling back to on-chain scan:', dbError);
