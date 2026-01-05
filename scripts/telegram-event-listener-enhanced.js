@@ -10,7 +10,9 @@ try {
 } catch (e) {
   // In production (Railway), environment variables are set directly
 }
-const { createThirdwebClient, getContract, readContract } = require('thirdweb');
+const { createThirdwebClient, getContract, readContract, prepareContractCall, sendTransaction } = require('thirdweb');
+const { privateKeyToAccount } = require('thirdweb/wallets');
+const https = require('https');
 const { defineChain } = require('thirdweb/chains');
 const { 
   sendTelegramMessage, 
@@ -26,6 +28,65 @@ const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0xC04c1DE2
 const POLL_INTERVAL = 60000; // Poll every 60 seconds
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://degended.bet';
 const ALCHEMY_RPC_URL = process.env.ALCHEMY_RPC_URL;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
+
+// Track suggested resolutions to avoid spamming
+const suggestedResolutions = new Set(); // Set of marketIds
+
+async function queryGeminiResolution(question) {
+  if (!GEMINI_API_KEY) {
+    console.warn('⚠️ GEMINI_API_KEY not set, skipping AI resolution');
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    const payload = JSON.stringify({
+      contents: [{
+        role: "user",
+        parts: [{
+          text: `You are a prediction market resolver. Based on real-world data, answer the following question with a clear YES or NO. Also provide a confidence score (0-100) and a brief reasoning.
+          
+          Question: ${question}`
+        }]
+      }],
+      tools: [{ google_search: {} }]
+    });
+
+    const options = {
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const response = JSON.parse(data);
+          const result = response.candidates?.[0]?.content?.parts?.[0]?.text;
+          const isYes = result?.toUpperCase().includes('YES');
+          const isNo = result?.toUpperCase().includes('NO');
+          
+          resolve({
+            suggestion: isYes ? 'YES' : (isNo ? 'NO' : 'INCONCLUSIVE'),
+            outcome: isYes ? 1 : (isNo ? 2 : 0),
+            reasoning: result,
+            sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map(c => c.web?.uri) || []
+          });
+        } catch (e) {
+          console.error('Gemini parse error:', e.message);
+          resolve(null);
+        }
+      });
+    });
+    req.on('error', (e) => { console.error('Gemini req error:', e); resolve(null); });
+    req.write(payload);
+    req.end();
+  });
+}
 
 // Define Sonic chain with Alchemy RPC
 const sonic = defineChain({
@@ -141,13 +202,61 @@ async function main() {
       `/<b>resolved</b> - Show the latest resolved market\n` +
       `/<b>subscribe</b> - Subscribe to market notifications\n` +
       `/<b>unsubscribe</b> - Unsubscribe from notifications\n` +
+      `/<b>resolve [id] [outcome]</b> - Admin only: Resolve a market\n` +
       `/<b>help</b> - Show this help message\n\n` +
       `📢 ${isSubscribed ? '✅ <b>You are subscribed!</b> You will receive notifications when:\n' : 'Subscribe to receive notifications when:\n'}` +
       `  • New markets are created\n` +
-      `  • Markets are resolved (with betting totals)\n\n` +
+      `  • Markets are resolved (with betting totals)\n` +
+      `  • AI suggests resolutions for expired markets\n\n` +
       `🔗 Visit: ${SITE_URL}`;
     
     await bot.sendMessage(msg.chat.id, helpMessage, { parse_mode: 'HTML' });
+  });
+
+  // Admin Resolve Command
+  bot.onText(/\/resolve (\d+) (\d+)/i, async (msg, match) => {
+    const chatId = msg.chat.id.toString();
+    
+    // Authorization check
+    if (!process.env.TELEGRAM_CHAT_ID || !process.env.TELEGRAM_CHAT_ID.includes(chatId)) {
+        return bot.sendMessage(chatId, "🚫 Unauthorized. Only the admin can resolve markets.");
+    }
+
+    if (!PRIVATE_KEY) {
+        return bot.sendMessage(chatId, "❌ Error: PRIVATE_KEY not set in bot environment.");
+    }
+
+    const marketId = parseInt(match[1]);
+    const outcome = parseInt(match[2]);
+
+    if (![1, 2, 3].includes(outcome)) {
+        return bot.sendMessage(chatId, "❌ Invalid outcome. Use 1 (A), 2 (B), or 3 (Refund).");
+    }
+
+    try {
+        await bot.sendMessage(chatId, `⚙️ Executing resolution for Market #${marketId} with outcome ${outcome}...`);
+        
+        const account = privateKeyToAccount({
+            client,
+            privateKey: PRIVATE_KEY,
+        });
+
+        const tx = prepareContractCall({
+            contract,
+            method: "function resolveMarket(uint256 _marketId, uint8 _outcome)",
+            params: [BigInt(marketId), outcome],
+        });
+
+        const { transactionHash } = await sendTransaction({
+            transaction: tx,
+            account,
+        });
+
+        await bot.sendMessage(chatId, `✅ <b>Market #${marketId} Resolved!</b>\n\n🔗 <a href="https://sonicscan.org/tx/${transactionHash}">View Transaction</a>`, { parse_mode: 'HTML' });
+    } catch (error) {
+        console.error('Resolution error:', error);
+        await bot.sendMessage(chatId, `❌ Error resolving market: ${error.message}`);
+    }
   });
 
   // Subscribe command - adds the chat to notifications
@@ -455,6 +564,30 @@ async function checkForNewMarkets(contract, bot) {
         } else if (resolved) {
           // Update resolved status even if we already notified (shouldn't happen now, but keep as safeguard)
           processedMarkets.set(i, { created: marketInfo.created, resolved: true });
+        } else if (!resolved) {
+          // AI RESOLUTION CHECK: Market is unresolved. Check if it's expired.
+          const isExpired = new Date(Number(endTime) * 1000) < new Date();
+          
+          if (isExpired && !suggestedResolutions.has(i)) {
+            console.log(`🤖 Market #${i} is expired and unresolved. Querying AI for suggestion...`);
+            
+            const aiResult = await queryGeminiResolution(question);
+            
+            if (aiResult) {
+              const aiMessage = `🤖 <b>AI Resolution Suggestion</b>\n\n` +
+                `📊 <b>Market #${i}</b>\n` +
+                `❓ <b>Question:</b> ${question}\n\n` +
+                `💡 <b>Suggested Outcome:</b> ${aiResult.suggestion}\n` +
+                `📝 <b>Reasoning:</b> ${aiResult.reasoning.substring(0, 500)}${aiResult.reasoning.length > 500 ? '...' : ''}\n\n` +
+                (aiResult.sources.length > 0 ? `🔗 <b>Sources:</b>\n${aiResult.sources.slice(0, 3).map(s => `• <a href="${s}">Link</a>`).join('\n')}\n\n` : '') +
+                `✅ To resolve, type:\n<code>/resolve ${i} ${aiResult.outcome}</code>`;
+
+              // Send only to the first subscribed chat (assumed to be the admin) or all subscribed
+              await sendToAllSubscribedChats(aiMessage, bot);
+              suggestedResolutions.add(i);
+              console.log(`✅ Sent AI suggestion for market #${i}`);
+            }
+          }
         }
 
       } catch (error) {
@@ -462,7 +595,7 @@ async function checkForNewMarkets(contract, bot) {
       }
     }
 
-    console.log(`⏰ Checked ${checkedCount} unresolved markets (skipped ${skippedCount} resolved) at ${new Date().toLocaleTimeString()}`);
+    console.log(`⏰ Checked ${checkedCount} unresolved markets (skipped ${skippedCount} resolved) at ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York' })}`);
 
   } catch (error) {
     console.error('Error in checkForNewMarkets:', error);

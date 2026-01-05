@@ -11,12 +11,13 @@ export function toFixed(value: number, decimals: number) {
     return value.toFixed(decimals);
 }
 
-// Format date to readable string
+// Format date to readable string in EST/NYC time
 export function formatDate(dateString: string) {
     return new Date(dateString).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
+        timeZone: 'America/New_York'
     });
 }
 

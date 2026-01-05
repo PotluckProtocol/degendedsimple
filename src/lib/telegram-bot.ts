@@ -91,6 +91,7 @@ export function formatMarketCreatedMessage(
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'America/New_York'
   });
 
   let message = `🎲 <b>New Market Created!</b>\n\n`;

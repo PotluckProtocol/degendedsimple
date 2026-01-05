@@ -22,18 +22,18 @@ export function CreateMarketForm() {
     const { mutateAsync: sendTransaction } = useSendAndConfirmTransaction();
     const { toast } = useToast();
     
-    // Initialize with default values
+    // Initialize with default values in EST/NYC time
     const getDefaultDate = () => {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        return tomorrow.toISOString().split('T')[0];
+        const estDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        estDate.setDate(estDate.getDate() + 1);
+        const year = estDate.getFullYear();
+        const month = String(estDate.getMonth() + 1).padStart(2, '0');
+        const day = String(estDate.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     };
 
     const getDefaultTime = () => {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(23, 59, 0, 0);
-        return tomorrow.toTimeString().slice(0, 5);
+        return "23:59";
     };
 
     const [question, setQuestion] = useState("");
@@ -57,9 +57,13 @@ export function CreateMarketForm() {
             return;
         }
 
-        // Combine date and time, convert to Unix timestamp
+        // Combine date and time, convert to Unix timestamp (interpreting input as EST/NYC)
         const dateTimeString = `${actualDate}T${actualTime}`;
-        const endTimestamp = Math.floor(new Date(dateTimeString).getTime() / 1000);
+        const localDate = new Date(dateTimeString);
+        const estString = localDate.toLocaleString('en-US', { timeZone: 'America/New_York' });
+        const estDate = new Date(estString);
+        const offset = localDate.getTime() - estDate.getTime();
+        const endTimestamp = Math.floor((localDate.getTime() + offset) / 1000);
         
         // Validate the date is valid
         if (isNaN(endTimestamp) || endTimestamp === 0) {
@@ -185,7 +189,7 @@ export function CreateMarketForm() {
                             type="date"
                             value={endDate}
                             onChange={(e) => setEndDate(e.target.value)}
-                            min={new Date().toISOString().split('T')[0]}
+                            min={new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })).toISOString().split('T')[0]}
                             disabled={isCreating}
                             required
                         />
